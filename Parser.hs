@@ -46,8 +46,8 @@ data PreprocessingLine = PreprocessingLine{
 cppNondigit :: GenParser Char st Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
-digit :: GenParser Char st Char
-digit = oneOf "0123456789"
+cppDigit :: GenParser Char st Char
+cppDigit = oneOf "0123456789"
 
 preprocessing_op_or_punc :: GenParser Char st String
 preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
@@ -60,6 +60,7 @@ preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "
     string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
     string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
 
+-- HEADER
 header_name :: GenParser Char st PreprocessingToken
 header_name = do
     x <- h_header_name <|> q_header_name
@@ -90,6 +91,30 @@ q_char = noneOf "\n\r\""
 
 q_char_sequence :: GenParser Char st String
 q_char_sequence = many1 q_char
+
+-- IDENTIFIER
+identifier :: GenParser Char st PreprocessingToken
+identifier = identifier_nondigit <|>
+    identifier_identifier_nondigit <|>
+    identifier_digit
+
+identifier_identifier_nondigit :: GenParser Char st PreprocessingToken
+identifier_identifier_nondigit = do
+    x <- identifier
+    y <- identifier_nondigit
+    return (PreprocessingToken Identifier ((text x) ++ (text y)))
+
+-- NOTE: universal-character-name is not supported (as I wanna kill every person who is using it)
+identifier_nondigit :: GenParser Char st PreprocessingToken
+identifier_nondigit = do
+    x <- cppNondigit 
+    return (PreprocessingToken Identifier [x])
+
+identifier_digit :: GenParser Char st PreprocessingToken
+identifier_digit = do
+    x <- identifier
+    y <- cppDigit
+    return (PreprocessingToken Identifier ((text x) ++ [y]))
 
 preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
 preprocessorTokenize (Left err) = Left err
