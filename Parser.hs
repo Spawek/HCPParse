@@ -49,13 +49,8 @@ cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 digit :: GenParser Char st Char
 digit = oneOf "0123456789"
 
---aaaeol :: Text.Parsec.Prim.Stream s m Char => Text.Parsec.Prim.ParsecT s u m String
---aaaeol = string "\n" <|> string "\n\r"
-
---preprocessing_op_orPunc :: GenParser String st Char
---preprocessing_op_orPunc :: ParsecT s u m String
-preprocessing_op_orPunc :: GenParser Char st String
-preprocessing_op_orPunc = string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
+preprocessing_op_or_punc :: GenParser Char st String
+preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
     string "<:" <|> string ":>" <|> string "<%" <|> string "%>" <|> string "%:" <|> string "%:%:" <|> string ";" <|> string ":" <|> string "..." <|>
     string "new" <|> string "delete" <|> string "?" <|> string "::" <|> string "." <|> string ".*" <|>
     string "+" <|> string "-" <|> string "*" <|> string "/" <|> string "%" <|> string "ˆ" <|> string "&" <|> string "|" <|> string "~" <|>
@@ -64,6 +59,37 @@ preprocessing_op_orPunc = string "{" <|> string "}" <|> string "[" <|> string "]
     string "<=" <|> string ">=" <|> string "&&" <|> string "||" <|> string "++" <|> string "--" <|> string "," <|> string "->*" <|> string "->" <|>
     string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
     string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
+
+header_name :: GenParser Char st PreprocessingToken
+header_name = do
+    x <- h_header_name <|> q_header_name
+    return (PreprocessingToken Header_name x)
+
+h_header_name :: GenParser Char st String
+h_header_name = do
+    char '<'
+    name <- h_char_sequence 
+    char '>'
+    return name
+
+q_header_name :: GenParser Char st String
+q_header_name = do
+    char '\"'
+    name <- q_char_sequence 
+    char '\"'
+    return name
+
+h_char :: GenParser Char st Char
+h_char = noneOf "\n\r>"
+
+h_char_sequence :: GenParser Char st String
+h_char_sequence = many1 h_char
+
+q_char :: GenParser Char st Char
+q_char = noneOf "\n\r\""
+
+q_char_sequence :: GenParser Char st String
+q_char_sequence = many1 q_char
 
 preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
 preprocessorTokenize (Left err) = Left err
@@ -104,6 +130,9 @@ notEOL = many notEOLHelp
 notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r") -- TODO: lines should be counted here - somehow
 
 
+main :: IO()
 main = readFile "testIn.cpp" >>= print . makeRawLines . parse cppLines "((UNKNOWN))"
---t2 = parse aaaeol "testestes"
+--main = do
+--    x <- readFile "testIn.cpp" --TODO: zapytac na stacku?
+--    return x >>= print . makeRawLines . parse cppLines "((UNKNOWN))")
 
