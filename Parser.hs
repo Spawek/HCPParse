@@ -66,7 +66,6 @@ preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "
     string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
     string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
 
--- HEADER
 header_name :: GenParser Char st PreprocessingToken
 header_name = do
     x <- h_header_name <|> q_header_name
@@ -104,18 +103,6 @@ identifier = do
     y <- many identifier_digit_or_nondigit
     return (PreprocessingToken Identifier (x:y))
 
--- NOTE: universal-character-name is not supported (as I wanna kill every person who is using it)
-identifier_nondigit :: GenParser Char st PreprocessingToken
-identifier_nondigit = do
-    x <- cppNondigit 
-    return (PreprocessingToken Identifier [x])
-
-identifier_digit :: GenParser Char st PreprocessingToken
-identifier_digit = do
-    x <- identifier
-    y <- cppDigit
-    return (PreprocessingToken Identifier ((text x) ++ [y]))
-
 pp_number :: GenParser Char st PreprocessingToken
 pp_number = do
     x <- cppDigit
@@ -124,6 +111,44 @@ pp_number = do
 
 pp_number_char :: GenParser Char st Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
+
+character_literal :: GenParser Char st String
+character_literal = do
+    x <- option "" encoding_prefix
+    y <- char '\''
+    z <- c_char_sequence
+    w <- char '\''
+    return (x ++ [y] ++ z ++ [w])
+
+encoding_prefix :: GenParser Char st String
+encoding_prefix = try (string "u8") <|> encoding_prefix2
+
+encoding_prefix2 :: GenParser Char st String
+encoding_prefix2 = do
+    x <- oneOf "uUL"
+    return [x]
+
+c_char_sequence :: GenParser Char st String
+c_char_sequence = do
+    x <- many c_char
+    return (concat x)
+
+c_char :: GenParser Char st String
+c_char = c_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
+    
+c_char_char :: GenParser Char st String
+c_char_char = do
+    x <- noneOf ("'\\\n")
+    return [x]
+
+escape_sequence :: GenParser Char st String
+escape_sequence = simple_escape_sequence  -- <|> octal_escape_sequence <|> hexadecimal_escape_sequence -- NOTE: not supported (for now?)
+
+simple_escape_sequence :: GenParser Char st String
+simple_escape_sequence = do
+    x <- char '\\'
+    y <- oneOf("’\"?\\abfnrtv")
+    return (x:[y])
 
 preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
 preprocessorTokenize (Left err) = Left err
