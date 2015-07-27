@@ -49,6 +49,9 @@ cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 cppDigit :: GenParser Char st Char
 cppDigit = oneOf "0123456789"
 
+cppSign :: GenParser Char st Char
+cppSign = oneOf "+-"
+
 preprocessing_op_or_punc :: GenParser Char st String
 preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
     string "<:" <|> string ":>" <|> string "<%" <|> string "%>" <|> string "%:" <|> string "%:%:" <|> string ";" <|> string ":" <|> string "..." <|>
@@ -92,17 +95,14 @@ q_char = noneOf "\n\r\""
 q_char_sequence :: GenParser Char st String
 q_char_sequence = many1 q_char
 
--- IDENTIFIER
 identifier :: GenParser Char st PreprocessingToken
-identifier = identifier_nondigit <|>
-    identifier_identifier_nondigit <|>
-    identifier_digit
+identifier = do
+    x <- cppNondigit
+    y <- many identifier_any
+    return (PreprocessingToken Identifier (x:y))
 
-identifier_identifier_nondigit :: GenParser Char st PreprocessingToken
-identifier_identifier_nondigit = do
-    x <- identifier
-    y <- identifier_nondigit
-    return (PreprocessingToken Identifier ((text x) ++ (text y)))
+identifier_any :: GenParser Char st Char
+identifier_any = cppNondigit <|> cppDigit
 
 -- NOTE: universal-character-name is not supported (as I wanna kill every person who is using it)
 identifier_nondigit :: GenParser Char st PreprocessingToken
@@ -115,6 +115,75 @@ identifier_digit = do
     x <- identifier
     y <- cppDigit
     return (PreprocessingToken Identifier ((text x) ++ [y]))
+
+-- PP_NUMBER - zapetla sie przy blednym!
+pp_number :: GenParser Char st PreprocessingToken
+pp_number = pp_digit <|>
+    pp_dot_digit  <|>
+    pp_number_digit <|>
+    pp_number_identifier_nondigit <|>
+    pp_number_quote_digit <|>
+    pp_number_quote_nondigit <|>
+    pp_number_e_sign <|>
+    pp_number_E_sign <|>
+    pp_number_dot
+
+pp_digit :: GenParser Char st PreprocessingToken
+pp_digit = do
+    x <- cppDigit
+    return (PreprocessingToken Pp_number [x])
+
+pp_dot_digit :: GenParser Char st PreprocessingToken
+pp_dot_digit = do
+    x <- char '.'
+    y <- cppDigit
+    return (PreprocessingToken Pp_number (x:[y]))
+
+pp_number_digit :: GenParser Char st PreprocessingToken
+pp_number_digit = do
+    x <- pp_number
+    y <- cppDigit
+    return (PreprocessingToken Pp_number ((text x) ++ [y]))
+
+pp_number_identifier_nondigit :: GenParser Char st PreprocessingToken
+pp_number_identifier_nondigit = do
+    x <- pp_number
+    y <- identifier_nondigit
+    return (PreprocessingToken Pp_number ((text x) ++ (text y)))
+
+pp_number_quote_digit :: GenParser Char st PreprocessingToken
+pp_number_quote_digit = do
+    x <- pp_number
+    y <- char '\''
+    z <- cppDigit
+    return (PreprocessingToken Pp_number ((text x) ++ [y] ++ [z]))
+
+pp_number_quote_nondigit :: GenParser Char st PreprocessingToken
+pp_number_quote_nondigit = do
+    x <- pp_number
+    y <- char '\''
+    z <- cppNondigit
+    return (PreprocessingToken Pp_number ((text x) ++ [y] ++ [z]))
+
+pp_number_e_sign :: GenParser Char st PreprocessingToken
+pp_number_e_sign = do
+    x <- pp_number
+    y <- char 'e'
+    z <- cppSign
+    return (PreprocessingToken Pp_number ((text x) ++ [y] ++ [z]))
+
+pp_number_E_sign :: GenParser Char st PreprocessingToken
+pp_number_E_sign = do
+    x <- pp_number
+    y <- char 'E'
+    z <- cppSign
+    return (PreprocessingToken Pp_number ((text x) ++ [y] ++ [z]))
+
+pp_number_dot :: GenParser Char st PreprocessingToken
+pp_number_dot = do
+    x <- pp_number
+    y <- char '.'
+    return (PreprocessingToken Pp_number ((text x) ++ [y]))
 
 preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
 preprocessorTokenize (Left err) = Left err
