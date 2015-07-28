@@ -112,13 +112,13 @@ pp_number = do
 pp_number_char :: GenParser Char st Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
 
-character_literal :: GenParser Char st String
+character_literal :: GenParser Char st PreprocessingToken
 character_literal = do
     x <- option "" encoding_prefix
     y <- char '\''
     z <- c_char_sequence
     w <- char '\''
-    return (x ++ [y] ++ z ++ [w])
+    return (PreprocessingToken Character_literal (x ++ [y] ++ z ++ [w]))
 
 encoding_prefix :: GenParser Char st String
 encoding_prefix = try (string "u8") <|> encoding_prefix2
@@ -140,6 +140,65 @@ c_char_char :: GenParser Char st String
 c_char_char = do
     x <- noneOf ("'\\\n")
     return [x]
+
+string_literal :: GenParser Char st PreprocessingToken
+string_literal = do
+    x <- (string_literal_s_char_sequence <|> string_literal_raw_string)
+    return (PreprocessingToken String_literal x)
+
+string_literal_s_char_sequence :: GenParser Char st String
+string_literal_s_char_sequence = do
+    x <- option "" encoding_prefix
+    y <- char '"'
+    z <- option "" s_char_sequence
+    w <- char '"'
+    return (x ++ [y] ++ z ++ [w])
+
+s_char_sequence :: GenParser Char st String
+s_char_sequence = do
+    x <- many1 s_char
+    return (concat x)
+
+s_char :: GenParser Char st String
+s_char = s_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
+
+s_char_char :: GenParser Char st String
+s_char_char = do
+    x <- noneOf ("\"\\\n")
+    return [x]
+
+string_literal_raw_string :: GenParser Char st String
+string_literal_raw_string = do
+    x <- option "" encoding_prefix
+    y <- char 'R'
+    z <- raw_string
+    return (x ++ [y] ++ z)
+
+raw_string :: GenParser Char st String
+raw_string = do
+    x <- char '"'
+    escape <- option "" d_char_sequence
+    z <- char '('
+    w <- option "" (r_char_sequence escape)
+    q <- char ')'
+    r <- string escape
+    u <- char '"'
+    return ([x] ++ escape ++ [z] ++ w ++ [q] ++ r ++ [u])
+
+r_char_sequence :: String -> (GenParser Char st String)
+r_char_sequence escape = many1 (r_char escape)
+
+r_char :: String -> (GenParser Char st Char)
+r_char escape = do
+    notFollowedBy( string( ")" ++ escape ++ "\"") )
+    x <- anyToken
+    return x
+
+d_char_sequence :: GenParser Char st String
+d_char_sequence = many1 d_char
+
+d_char :: GenParser Char st Char
+d_char = noneOf(" ()\\\t\v\f\n")
 
 escape_sequence :: GenParser Char st String
 escape_sequence = simple_escape_sequence  -- <|> octal_escape_sequence <|> hexadecimal_escape_sequence -- NOTE: not supported (for now?)
