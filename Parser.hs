@@ -2,6 +2,9 @@ import Text.ParserCombinators.Parsec
 import System.Environment
 --import Text.Parsec.String
 
+-- nice links:
+-- http://www.vex.net/~trebla/haskell/parsec-generally.xhtml
+
 -- according to C++14 draft:
 --    1) remove slash endlines
 --    2) do preprocessing
@@ -10,15 +13,14 @@ import System.Environment
 
 -- NOTE: GenParser String st String - "st" means state actually - I can use of it somehow
 
-data RawLine = RawLine {
-    lineContent :: String,
-    lineNo :: Int
-} deriving (Show)
+--data RawLine = RawLine {
+--    lineContent :: String,
+--    lineNo :: Int,
+--    col :: Int
+--} deriving (Show)
 
-data PreprocessorDefine = PreprocessorDefine {
-    from :: String,
-    to :: String
-}
+--update_pos :: SourcePos -> RawLine -> [RawLine] -> SourcePos
+--update_pos pos _ _ = pos
 
 -- as in C++14 standard
 data PreprocessingTokenType = 
@@ -37,82 +39,84 @@ data PreprocessingToken = PreprocessingToken {
     text :: String
 } deriving (Show)
 
-data PreprocessingLine = PreprocessingLine{
-    tokens :: [PreprocessingToken],
-    line :: RawLine
-} deriving (Show)
+--data PreprocessingLine = PreprocessingLine{
+--    tokens :: [PreprocessingToken],
+--    line :: RawLine
+--} deriving (Show)
 
 -- from C++14 standard
-cppNondigit :: GenParser Char st Char
+cppNondigit :: Parser Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
-cppDigit :: GenParser Char st Char
+cppDigit :: Parser Char
 cppDigit = oneOf "0123456789"
 
-identifier_digit_or_nondigit :: GenParser Char st Char
+identifier_digit_or_nondigit :: Parser Char
 identifier_digit_or_nondigit = cppNondigit <|> cppDigit
 
-cppSign :: GenParser Char st Char
+cppSign :: Parser Char
 cppSign = oneOf "+-"
 
-preprocessing_op_or_punc :: GenParser Char st String
-preprocessing_op_or_punc = string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
-    string "<:" <|> string ":>" <|> string "<%" <|> string "%>" <|> string "%:" <|> string "%:%:" <|> string ";" <|> string ":" <|> string "..." <|>
-    string "new" <|> string "delete" <|> string "?" <|> string "::" <|> string "." <|> string ".*" <|>
-    string "+" <|> string "-" <|> string "*" <|> string "/" <|> string "%" <|> string "ˆ" <|> string "&" <|> string "|" <|> string "~" <|>
-    string "!" <|> string "=" <|> string "<" <|> string ">" <|> string "+=" <|> string "-=" <|> string "*=" <|> string "/=" <|>  string "%=" <|>
-    string "ˆ=" <|> string "&=" <|> string "|=" <|> string "<<" <|> string ">>" <|> string ">>=" <|> string "<<=" <|> string "==" <|> string "!=" <|>
-    string "<=" <|> string ">=" <|> string "&&" <|> string "||" <|> string "++" <|> string "--" <|> string "," <|> string "->*" <|> string "->" <|>
-    string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
-    string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
+preprocessing_op_or_punc :: Parser PreprocessingToken
+preprocessing_op_or_punc = do
+    x <- string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
+        string "<:" <|> string ":>" <|> string "<%" <|> string "%>" <|> string "%:" <|> string "%:%:" <|> string ";" <|> string ":" <|> string "..." <|>
+        string "new" <|> string "delete" <|> string "?" <|> string "::" <|> string "." <|> string ".*" <|>
+        string "+" <|> string "-" <|> string "*" <|> string "/" <|> string "%" <|> string "ˆ" <|> string "&" <|> string "|" <|> string "~" <|>
+        string "!" <|> string "=" <|> string "<" <|> string ">" <|> string "+=" <|> string "-=" <|> string "*=" <|> string "/=" <|>  string "%=" <|>
+        string "ˆ=" <|> string "&=" <|> string "|=" <|> string "<<" <|> string ">>" <|> string ">>=" <|> string "<<=" <|> string "==" <|> string "!=" <|>
+        string "<=" <|> string ">=" <|> string "&&" <|> string "||" <|> string "++" <|> string "--" <|> string "," <|> string "->*" <|> string "->" <|>
+        string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
+        string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
+    return (PreprocessingToken Preprocessing_op_or_punc x)
 
-header_name :: GenParser Char st PreprocessingToken
+header_name :: Parser PreprocessingToken
 header_name = do
     x <- h_header_name <|> q_header_name
     return (PreprocessingToken Header_name x)
 
-h_header_name :: GenParser Char st String
+h_header_name :: Parser String
 h_header_name = do
     char '<'
     name <- h_char_sequence 
     char '>'
     return name
 
-q_header_name :: GenParser Char st String
+q_header_name :: Parser String
 q_header_name = do
     char '\"'
     name <- q_char_sequence 
     char '\"'
     return name
 
-h_char :: GenParser Char st Char
+h_char :: Parser Char
 h_char = noneOf "\n\r>"
 
-h_char_sequence :: GenParser Char st String
+h_char_sequence :: Parser String
 h_char_sequence = many1 h_char
 
-q_char :: GenParser Char st Char
+q_char :: Parser Char
 q_char = noneOf "\n\r\""
 
-q_char_sequence :: GenParser Char st String
+q_char_sequence :: Parser String
 q_char_sequence = many1 q_char
 
-identifier :: GenParser Char st PreprocessingToken
+identifier :: Parser PreprocessingToken
 identifier = do
     x <- cppNondigit
     y <- many identifier_digit_or_nondigit
     return (PreprocessingToken Identifier (x:y))
 
-pp_number :: GenParser Char st PreprocessingToken
+pp_number :: Parser PreprocessingToken
 pp_number = do
     x <- cppDigit
     y <- many pp_number_char
     return (PreprocessingToken Pp_number (x:y))
 
-pp_number_char :: GenParser Char st Char
+pp_number_char :: Parser Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
 
-character_literal :: GenParser Char st PreprocessingToken
+character_literal :: Parser PreprocessingToken
 character_literal = do
     x <- option "" encoding_prefix
     y <- char '\''
@@ -120,33 +124,33 @@ character_literal = do
     w <- char '\''
     return (PreprocessingToken Character_literal (x ++ [y] ++ z ++ [w]))
 
-encoding_prefix :: GenParser Char st String
+encoding_prefix :: Parser String
 encoding_prefix = try (string "u8") <|> encoding_prefix2
 
-encoding_prefix2 :: GenParser Char st String
+encoding_prefix2 :: Parser String
 encoding_prefix2 = do
     x <- oneOf "uUL"
     return [x]
 
-c_char_sequence :: GenParser Char st String
+c_char_sequence :: Parser String
 c_char_sequence = do
     x <- many c_char
     return (concat x)
 
-c_char :: GenParser Char st String
+c_char :: Parser String
 c_char = c_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
     
-c_char_char :: GenParser Char st String
+c_char_char :: Parser String
 c_char_char = do
     x <- noneOf ("'\\\n")
     return [x]
 
-string_literal :: GenParser Char st PreprocessingToken
+string_literal :: Parser PreprocessingToken
 string_literal = do
     x <- (string_literal_s_char_sequence <|> string_literal_raw_string)
     return (PreprocessingToken String_literal x)
 
-string_literal_s_char_sequence :: GenParser Char st String
+string_literal_s_char_sequence :: Parser String
 string_literal_s_char_sequence = do
     x <- option "" encoding_prefix
     y <- char '"'
@@ -154,27 +158,27 @@ string_literal_s_char_sequence = do
     w <- char '"'
     return (x ++ [y] ++ z ++ [w])
 
-s_char_sequence :: GenParser Char st String
+s_char_sequence :: Parser String
 s_char_sequence = do
     x <- many1 s_char
     return (concat x)
 
-s_char :: GenParser Char st String
+s_char :: Parser String
 s_char = s_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
 
-s_char_char :: GenParser Char st String
+s_char_char :: Parser String
 s_char_char = do
     x <- noneOf ("\"\\\n")
     return [x]
 
-string_literal_raw_string :: GenParser Char st String
+string_literal_raw_string :: Parser String
 string_literal_raw_string = do
     x <- option "" encoding_prefix
     y <- char 'R'
     z <- raw_string
     return (x ++ [y] ++ z)
 
-raw_string :: GenParser Char st String
+raw_string :: Parser String
 raw_string = do
     x <- char '"'
     escape <- option "" d_char_sequence
@@ -185,37 +189,61 @@ raw_string = do
     u <- char '"'
     return ([x] ++ escape ++ [z] ++ w ++ [q] ++ r ++ [u])
 
-r_char_sequence :: String -> (GenParser Char st String)
+r_char_sequence :: String -> (Parser String)
 r_char_sequence escape = many1 (r_char escape)
 
-r_char :: String -> (GenParser Char st Char)
+r_char :: String -> (Parser Char)
 r_char escape = do
     notFollowedBy( string( ")" ++ escape ++ "\"") )
     x <- anyToken
     return x
 
-d_char_sequence :: GenParser Char st String
+d_char_sequence :: Parser String
 d_char_sequence = many1 d_char
 
-d_char :: GenParser Char st Char
+d_char :: Parser Char
 d_char = noneOf(" ()\\\t\v\f\n")
 
-escape_sequence :: GenParser Char st String
+escape_sequence :: Parser String
 escape_sequence = simple_escape_sequence  -- <|> octal_escape_sequence <|> hexadecimal_escape_sequence -- NOTE: not supported (for now?)
 
-simple_escape_sequence :: GenParser Char st String
+simple_escape_sequence :: Parser String
 simple_escape_sequence = do
     x <- char '\\'
     y <- oneOf("’\"?\\abfnrtv")
     return (x:[y])
 
-preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
-preprocessorTokenize (Left err) = Left err
-preprocessorTokenize (Right parsed) = Right $ map preprocessorTokenizeLine parsed
+--rawLineGetter :: GenParser RawLine st String
+--rawLineGetter = do
+--    x <- lineContent
+--    return "dsa"
 
-preprocessorTokenizeLine :: RawLine -> PreprocessingLine
-preprocessorTokenizeLine line = PreprocessingLine [] line --DUMMY! TODO: add parser here
+-- FROM: http://www.vex.net/~trebla/haskell/parsec-generally.xhtml
+--pRawLine = tokenPrim show update_pos get_num where
+--  get_num RawLine{lineContent=x} = Just x
+--  get_num _ = Nothing
 
+--update_pos :: SourcePos -> RawLine -> [RawLine] -> SourcePos
+--update_pos pos _ (tok:_) = setSourceLine (setSourceColumn pos (col tok)) (lin tok)
+--update_pos pos _ [] = pos
+
+
+
+--preprocessorTokenize :: Parser PreprocessingLine
+--preprocessorTokenize = do
+--    token <- header_name -- . pRawLine
+--    return (PreprocessingLine [] (RawLine "test" 123 0))
+
+--preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
+--preprocessorTokenize (Left err) = Left err
+--preprocessorTokenize (Right parsed) = Right $ map preprocessorTokenizeLine parsed
+
+--preprocessorTokenizeLine :: RawLine -> PreprocessingLine
+--preprocessorTokenizeLine line = PreprocessingLine preprocessingTokens line --DUMMY! TODO: add parser here
+--    where preprocessingTokens = getPreprocessingTokens line
+
+--getPreprocessingTokens :: RawLine -> Either ParseError [PreprocessingToken]
+--getPreprocessingTokens line = 
 
 --applyDefines :: Either ParseError [RawLine] -> Either ParseError [RawLine]
 --applyDefines (Left err) = Left err
@@ -232,25 +260,13 @@ preprocessorTokenizeLine line = PreprocessingLine [] line --DUMMY! TODO: add par
 
 --defines without parameters only
 
---TODO: change it to monad use
-makeRawLines :: Either ParseError [String] -> Either ParseError [RawLine]
-makeRawLines (Left err) = Left err
-makeRawLines (Right parsed) = Right $ makeRawLines2 1 parsed
-
---BUG: lines with \\\n are not counted
-makeRawLines2 :: Int -> [String] -> [RawLine]
-makeRawLines2 _ [] = []
-makeRawLines2 lineNo (x:xs) = ((RawLine x lineNo):(makeRawLines2 (lineNo + 1) xs))
-
 cppLines = endBy notEOL eolChar
 eolChar = oneOf ("\n\r")
 notEOL = many notEOLHelp
 notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r") -- TODO: lines should be counted here - somehow
 
-
 main :: IO()
-main = readFile "testIn.cpp" >>= print . makeRawLines . parse cppLines "((UNKNOWN))"
---main = do
---    x <- readFile "testIn.cpp" --TODO: zapytac na stacku?
---    return x >>= print . makeRawLines . parse cppLines "((UNKNOWN))")
-
+main = do
+    rawText <- readFile "testIn.cpp"
+    parsed <- return $ parse cppLines "((UNKNOWN))" rawText
+    print parsed
