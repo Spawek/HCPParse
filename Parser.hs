@@ -1,13 +1,19 @@
 import Text.ParserCombinators.Parsec
 import System.Environment
+import Data.Either.Unwrap
+import Data.List
+import Lib.Util(concatWith)
 --import Text.Parsec.String
+
+-- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
 
 -- nice links:
 -- http://www.vex.net/~trebla/haskell/parsec-generally.xhtml
 
 -- according to C++14 draft:
 --    1) remove slash endlines
---    2) do preprocessing
+--    2) join whitespaces
+--    3) do preprocessing
 --        a) preprocessing tokenizer
 --        b) ...
 
@@ -73,7 +79,7 @@ preprocessing_op_or_punc = do
 header_name :: Parser PreprocessingToken
 header_name = do
     x <- h_header_name <|> q_header_name
-    return (PreprocessingToken Header_name x)
+    return $ PreprocessingToken Header_name x
 
 h_header_name :: Parser String
 h_header_name = do
@@ -105,13 +111,13 @@ identifier :: Parser PreprocessingToken
 identifier = do
     x <- cppNondigit
     y <- many identifier_digit_or_nondigit
-    return (PreprocessingToken Identifier (x:y))
+    return $ PreprocessingToken Identifier (x:y)
 
 pp_number :: Parser PreprocessingToken
 pp_number = do
     x <- cppDigit
     y <- many pp_number_char
-    return (PreprocessingToken Pp_number (x:y))
+    return $ PreprocessingToken Pp_number (x:y)
 
 pp_number_char :: Parser Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
@@ -122,7 +128,7 @@ character_literal = do
     y <- char '\''
     z <- c_char_sequence
     w <- char '\''
-    return (PreprocessingToken Character_literal (x ++ [y] ++ z ++ [w]))
+    return $ PreprocessingToken Character_literal (x ++ [y] ++ z ++ [w])
 
 encoding_prefix :: Parser String
 encoding_prefix = try (string "u8") <|> encoding_prefix2
@@ -135,7 +141,7 @@ encoding_prefix2 = do
 c_char_sequence :: Parser String
 c_char_sequence = do
     x <- many c_char
-    return (concat x)
+    return $ concat x
 
 c_char :: Parser String
 c_char = c_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
@@ -148,7 +154,7 @@ c_char_char = do
 string_literal :: Parser PreprocessingToken
 string_literal = do
     x <- (string_literal_s_char_sequence <|> string_literal_raw_string)
-    return (PreprocessingToken String_literal x)
+    return $ PreprocessingToken String_literal x
 
 string_literal_s_char_sequence :: Parser String
 string_literal_s_char_sequence = do
@@ -156,12 +162,12 @@ string_literal_s_char_sequence = do
     y <- char '"'
     z <- option "" s_char_sequence
     w <- char '"'
-    return (x ++ [y] ++ z ++ [w])
+    return $ x ++ [y] ++ z ++ [w]
 
 s_char_sequence :: Parser String
 s_char_sequence = do
     x <- many1 s_char
-    return (concat x)
+    return $ concat x
 
 s_char :: Parser String
 s_char = s_char_char <|> escape_sequence -- <|> universal_character_name -- NOTE: not supported
@@ -176,7 +182,7 @@ string_literal_raw_string = do
     x <- option "" encoding_prefix
     y <- char 'R'
     z <- raw_string
-    return (x ++ [y] ++ z)
+    return $ x ++ [y] ++ z
 
 raw_string :: Parser String
 raw_string = do
@@ -187,7 +193,7 @@ raw_string = do
     q <- char ')'
     r <- string escape
     u <- char '"'
-    return ([x] ++ escape ++ [z] ++ w ++ [q] ++ r ++ [u])
+    return $ [x] ++ escape ++ [z] ++ w ++ [q] ++ r ++ [u]
 
 r_char_sequence :: String -> (Parser String)
 r_char_sequence escape = many1 (r_char escape)
@@ -211,7 +217,7 @@ simple_escape_sequence :: Parser String
 simple_escape_sequence = do
     x <- char '\\'
     y <- oneOf("’\"?\\abfnrtv")
-    return (x:[y])
+    return $ x:[y]
 
 --rawLineGetter :: GenParser RawLine st String
 --rawLineGetter = do
@@ -256,17 +262,50 @@ simple_escape_sequence = do
 --          newOutList = [newLine:out]
 --          newDefinesList = appendDefine nextInput defines
 
---useDefines ::
-
---defines without parameters only
-
 cppLines = endBy notEOL eolChar
 eolChar = oneOf ("\n\r")
 notEOL = many notEOLHelp
 notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r") -- TODO: lines should be counted here - somehow
 
+whitespaceChar = "\n\r\t\v " -- NOT FROM STANDARD
+
+anyCharacter :: Parser String
+anyCharacter = do
+    white <- many (oneOf whitespaceChar)
+    nonWhite <- many1 (noneOf whitespaceChar)
+    return (nonWhite ++ (changeWhiteSpaces white))
+
+changeWhiteSpaces :: String -> String
+changeWhiteSpaces [] = []
+changeWhiteSpaces x 
+                | isInfixOf "\n" x = "\n"
+                | otherwise        = " "
+
+joinWhitespaces :: Parser String
+joinWhitespaces = do
+    x <- many anyCharacter
+    eof
+    return $ concat x
+
+preprocessorTokenizer :: Parser [PreprocessingToken]
+preprocessorTokenizer = do
+    return [] -- DUMMY
+
 main :: IO()
 main = do
     rawText <- readFile "testIn.cpp"
-    parsed <- return $ parse cppLines "((UNKNOWN))" rawText
-    print parsed
+    parsedLines <- return $ parse cppLines "((UNKNOWN))" rawText
+    if (isLeft parsedLines) then
+        print "line parse error"
+    else do
+        preparedForPreprocess <- return $ parse joinWhitespaces "((WHITESPACE JOIN))" (concatWith "\n" (fromRight parsedLines)) -- NOTE: line endings are lost here
+        if (isLeft preparedForPreprocess) then
+            print "prepare for preprocessing failed"
+        else do
+            tokens <- return $ parse preprocessorTokenizer "((UNKNOWN PREPROC))" (fromRight preparedForPreprocess)
+            print tokens
+    --print parsedLines
+    --else do
+    --preprocessingTokens <- return $ parse preprocessorTokenizer "((UNKNOWN PREPROC))" parsedLines
+
+    
