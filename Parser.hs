@@ -45,12 +45,6 @@ data PreprocessingToken = PreprocessingToken {
     text :: String
 } deriving (Show)
 
---data PreprocessingLine = PreprocessingLine{
---    tokens :: [PreprocessingToken],
---    line :: RawLine
---} deriving (Show)
-
--- from C++14 standard
 cppNondigit :: Parser Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
@@ -219,49 +213,6 @@ simple_escape_sequence = do
     y <- oneOf("’\"?\\abfnrtv")
     return $ x:[y]
 
---rawLineGetter :: GenParser RawLine st String
---rawLineGetter = do
---    x <- lineContent
---    return "dsa"
-
--- FROM: http://www.vex.net/~trebla/haskell/parsec-generally.xhtml
---pRawLine = tokenPrim show update_pos get_num where
---  get_num RawLine{lineContent=x} = Just x
---  get_num _ = Nothing
-
---update_pos :: SourcePos -> RawLine -> [RawLine] -> SourcePos
---update_pos pos _ (tok:_) = setSourceLine (setSourceColumn pos (col tok)) (lin tok)
---update_pos pos _ [] = pos
-
-
-
---preprocessorTokenize :: Parser PreprocessingLine
---preprocessorTokenize = do
---    token <- header_name -- . pRawLine
---    return (PreprocessingLine [] (RawLine "test" 123 0))
-
---preprocessorTokenize :: Either ParseError [RawLine] -> Either ParseError [PreprocessingLine]
---preprocessorTokenize (Left err) = Left err
---preprocessorTokenize (Right parsed) = Right $ map preprocessorTokenizeLine parsed
-
---preprocessorTokenizeLine :: RawLine -> PreprocessingLine
---preprocessorTokenizeLine line = PreprocessingLine preprocessingTokens line --DUMMY! TODO: add parser here
---    where preprocessingTokens = getPreprocessingTokens line
-
---getPreprocessingTokens :: RawLine -> Either ParseError [PreprocessingToken]
---getPreprocessingTokens line = 
-
---applyDefines :: Either ParseError [RawLine] -> Either ParseError [RawLine]
---applyDefines (Left err) = Left err
---applyDefines (Right parsed) = Right $ applyDefines2 [] parsed []
-
---applyDefines2 :: [PreprocessorDefine] -> [RawLine] -> [RawLine]
---applyDefines2 _ [] x = x
---applyDefines2 defines [nextInput:restInput] out = applyDefines2 newDefinesList xs newOutList
---    where newLine = useDefines defines nextInput
---          newOutList = [newLine:out]
---          newDefinesList = appendDefine nextInput defines
-
 cppLines = endBy notEOL eolChar
 eolChar = oneOf ("\n\r")
 notEOL = many notEOLHelp
@@ -287,8 +238,8 @@ joinWhitespaces = do
     eof
     return $ concat x
 
-preprocessorTokenizer :: Parser [PreprocessingToken]
-preprocessorTokenizer = do
+ppTokenizer :: Parser [PreprocessingToken]
+ppTokenizer = do
     return [] -- DUMMY
 
 main :: IO()
@@ -297,22 +248,17 @@ main = do
     putStr "\nRAW TEXT BEGIN\n"
     putStr rawText
     putStr "\nRAW TEXT END\n"
-    parsedLines <- return $ parse cppLines "((UNKNOWN))" rawText
-    if (isLeft parsedLines) then
-        print "line parse error"
-    else do
-        print parsedLines
-        preparedForPreprocess <- return $ parse joinWhitespaces "((WHITESPACE JOIN))" (concatWith "\n" (fromRight parsedLines)) -- NOTE: line endings are lost here
-        if (isLeft preparedForPreprocess) then
-            print "prepare for preprocessing failed"
-        else do
-            putStr "\nPRE PREPROCESSING BEGIN\n"
-            putStr $ fromRight preparedForPreprocess
-            putStr "\nPRE PREPROCESSING END\n"
-            tokens <- return $ parse preprocessorTokenizer "((UNKNOWN PREPROC))" (fromRight preparedForPreprocess)
-            print tokens
-    --print parsedLines
-    --else do
-    --preprocessingTokens <- return $ parse preprocessorTokenizer "((UNKNOWN PREPROC))" parsedLines
-
-    
+    eitherParsedLines <- return $ parse cppLines "((UNKNOWN))" rawText
+    case eitherParsedLines of
+        Left _ -> print "line parse error"
+        Right parsedLines -> do
+            print parsedLines
+            eitherPreparedForPp <- return $ parse joinWhitespaces "((WHITESPACE JOIN))" (concatWith "\n" parsedLines) -- NOTE: line endings are lost here
+            case eitherPreparedForPp of
+                Left _ -> print "prepare for preprocessing failed" 
+                Right preparedForPp -> do
+                    putStr "\nPRE PREPROCESSING BEGIN\n"
+                    putStr preparedForPp
+                    putStr "\nPRE PREPROCESSING END\n"
+                    tokens <- return $ parse ppTokenizer "((UNKNOWN PREPROC))" preparedForPp
+                    print tokens
