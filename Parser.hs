@@ -38,7 +38,7 @@ data PreprocessingTokenType =
     String_literal |
     User_defined_string_literal |
     Preprocessing_op_or_punc |
-    PP_WhiteSpace |
+    PP_NewLine |
     PP_AnythingElse
     deriving (Show)
 
@@ -251,17 +251,19 @@ ppNonWhite = do
     x <- noneOf whitespaceChar
     return $ PreprocessingToken PP_AnythingElse [x]
 
-ppWhite :: Parser PreprocessingToken
-ppWhite = do
-    x <- oneOf whitespaceChar
-    return $ PreprocessingToken PP_WhiteSpace [x]
+ppNewLine :: Parser PreprocessingToken
+ppNewLine = do
+    x <- oneOf "\n\r"
+    return $ PreprocessingToken PP_NewLine [x] 
 
 ppTokenizer2 :: Parser PreprocessingToken
-ppTokenizer2 = try header_name <|> try identifier <|> try pp_number <|>
-               try character_literal <|> try string_literal <|>
-               try preprocessing_op_or_punc <|> try ppNonWhite <|>
-               try ppWhite
+ppTokenizer2 = do
+    skipMany (oneOf "\r\v ")
+    x <- try header_name <|> try identifier <|> try pp_number <|> try character_literal <|> try string_literal <|> try preprocessing_op_or_punc <|> try ppNonWhite <|> try ppNewLine 
+    return x
 
+
+-- TODO: get rid of comments before joinWhitespaces
 main :: IO()
 main = do
     rawText <- readFile "testIn.cpp"
@@ -280,5 +282,10 @@ main = do
                     putStr "\nPRE PREPROCESSING BEGIN\n"
                     putStr preparedForPp
                     putStr "\nPRE PREPROCESSING END\n"
-                    tokens <- return $ parse ppTokenizer "((UNKNOWN PREPROC))" preparedForPp
-                    print tokens
+                    eitherTokens <- return $ parse ppTokenizer "((UNKNOWN PREPROC))" preparedForPp
+                    case eitherTokens of
+                        Left err -> print $ "pp tokenizer failed: " ++ show err
+                        Right tokens -> do
+                            putStr "\nPP TOKENS BEGIN\n"
+                            print tokens
+                            putStr "\nPP TOKENS END\n"
