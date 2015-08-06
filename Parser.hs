@@ -273,13 +273,13 @@ anyCharacter :: Parser String
 anyCharacter = do
     white <- many (oneOf whitespaceChar)
     nonWhite <- many1 (noneOf whitespaceChar)
-    return (nonWhite ++ (changeWhiteSpaces white))
+    return $ (changeWhiteSpaces white) ++ nonWhite
 
 changeWhiteSpaces :: String -> String
 changeWhiteSpaces [] = []
 changeWhiteSpaces x 
-                | isInfixOf "\n" x = "\n"
-                | otherwise        = " "
+                | elem '\n' x  = "\n"
+                | otherwise    = " "
 
 joinWhitespaces :: Parser String
 joinWhitespaces = do
@@ -294,14 +294,21 @@ preprocessorTokenizer = do
 main :: IO()
 main = do
     rawText <- readFile "testIn.cpp"
+    putStr "\nRAW TEXT BEGIN\n"
+    putStr rawText
+    putStr "\nRAW TEXT END\n"
     parsedLines <- return $ parse cppLines "((UNKNOWN))" rawText
     if (isLeft parsedLines) then
         print "line parse error"
     else do
+        print parsedLines
         preparedForPreprocess <- return $ parse joinWhitespaces "((WHITESPACE JOIN))" (concatWith "\n" (fromRight parsedLines)) -- NOTE: line endings are lost here
         if (isLeft preparedForPreprocess) then
             print "prepare for preprocessing failed"
         else do
+            putStr "\nPRE PREPROCESSING BEGIN\n"
+            putStr $ fromRight preparedForPreprocess
+            putStr "\nPRE PREPROCESSING END\n"
             tokens <- return $ parse preprocessorTokenizer "((UNKNOWN PREPROC))" (fromRight preparedForPreprocess)
             print tokens
     --print parsedLines
