@@ -37,7 +37,9 @@ data PreprocessingTokenType =
     User_defined_character_literal |
     String_literal |
     User_defined_string_literal |
-    Preprocessing_op_or_punc
+    Preprocessing_op_or_punc |
+    PP_WhiteSpace |
+    PP_AnythingElse
     deriving (Show)
 
 data PreprocessingToken = PreprocessingToken {
@@ -216,7 +218,7 @@ simple_escape_sequence = do
 cppLines = endBy notEOL eolChar
 eolChar = oneOf ("\n\r")
 notEOL = many notEOLHelp
-notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r") -- TODO: lines should be counted here - somehow
+notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r")
 
 whitespaceChar = "\n\r\t\v " -- NOT FROM STANDARD
 
@@ -240,7 +242,25 @@ joinWhitespaces = do
 
 ppTokenizer :: Parser [PreprocessingToken]
 ppTokenizer = do
-    return [] -- DUMMY
+    x <- many ppTokenizer2
+    eof
+    return x
+
+ppNonWhite :: Parser PreprocessingToken
+ppNonWhite = do
+    x <- noneOf whitespaceChar
+    return $ PreprocessingToken PP_AnythingElse [x]
+
+ppWhite :: Parser PreprocessingToken
+ppWhite = do
+    x <- oneOf whitespaceChar
+    return $ PreprocessingToken PP_WhiteSpace [x]
+
+ppTokenizer2 :: Parser PreprocessingToken
+ppTokenizer2 = try header_name <|> try identifier <|> try pp_number <|>
+               try character_literal <|> try string_literal <|>
+               try preprocessing_op_or_punc <|> try ppNonWhite <|>
+               try ppWhite
 
 main :: IO()
 main = do
@@ -250,12 +270,12 @@ main = do
     putStr "\nRAW TEXT END\n"
     eitherParsedLines <- return $ parse cppLines "((UNKNOWN))" rawText
     case eitherParsedLines of
-        Left _ -> print "line parse error"
+        Left err -> print $ "line parse error: " ++ show err
         Right parsedLines -> do
             print parsedLines
             eitherPreparedForPp <- return $ parse joinWhitespaces "((WHITESPACE JOIN))" (concatWith "\n" parsedLines) -- NOTE: line endings are lost here
             case eitherPreparedForPp of
-                Left _ -> print "prepare for preprocessing failed" 
+                Left err -> print $ "prepare for preprocessing failed: " ++ show err
                 Right preparedForPp -> do
                     putStr "\nPRE PREPROCESSING BEGIN\n"
                     putStr preparedForPp
