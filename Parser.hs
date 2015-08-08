@@ -3,7 +3,6 @@ import System.Environment
 import Data.Either.Unwrap
 import Data.List
 import Lib.Util(concatWith)
---import Text.Parsec.String
 
 -- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
 
@@ -29,7 +28,7 @@ import Lib.Util(concatWith)
 --update_pos pos _ _ = pos
 
 -- as in C++14 standard
-data PreprocessingTokenType = 
+data PPTokenType = 
     Header_name |
     Identifier |
     Pp_number | 
@@ -39,11 +38,12 @@ data PreprocessingTokenType =
     User_defined_string_literal |
     Preprocessing_op_or_punc |
     PP_NewLine |
-    PP_AnythingElse
+    PP_AnythingElse |
+    PP_Comment
     deriving (Show)
 
-data PreprocessingToken = PreprocessingToken {
-    tokenType :: PreprocessingTokenType,
+data PPToken = PPToken {
+    tokenType :: PPTokenType,
     text :: String
 } deriving (Show)
 
@@ -59,23 +59,28 @@ identifier_digit_or_nondigit = cppNondigit <|> cppDigit
 cppSign :: Parser Char
 cppSign = oneOf "+-"
 
-preprocessing_op_or_punc :: Parser PreprocessingToken
-preprocessing_op_or_punc = do
-    x <- string "{" <|> string "}" <|> string "[" <|> string "]" <|> string "#" <|> string "##" <|> string "(" <|> string ")" <|>
-        string "<:" <|> string ":>" <|> string "<%" <|> string "%>" <|> string "%:" <|> string "%:%:" <|> string ";" <|> string ":" <|> string "..." <|>
-        string "new" <|> string "delete" <|> string "?" <|> string "::" <|> string "." <|> string ".*" <|>
-        string "+" <|> string "-" <|> string "*" <|> string "/" <|> string "%" <|> string "ˆ" <|> string "&" <|> string "|" <|> string "~" <|>
-        string "!" <|> string "=" <|> string "<" <|> string ">" <|> string "+=" <|> string "-=" <|> string "*=" <|> string "/=" <|>  string "%=" <|>
-        string "ˆ=" <|> string "&=" <|> string "|=" <|> string "<<" <|> string ">>" <|> string ">>=" <|> string "<<=" <|> string "==" <|> string "!=" <|>
-        string "<=" <|> string ">=" <|> string "&&" <|> string "||" <|> string "++" <|> string "--" <|> string "," <|> string "->*" <|> string "->" <|>
-        string "and" <|> string "and_eq" <|> string "bitand" <|> string "bitor" <|> string "compl" <|> string "not" <|> string "not_eq "<|> 
-        string "or" <|> string "or_eq" <|> string "xor" <|> string "xor_eq"
-    return (PreprocessingToken Preprocessing_op_or_punc x)
+pp_comment :: Parser PPToken
+pp_comment = do
+    x <- try(string "/*") <|> try(string "//")
+    return $ PPToken PP_Comment x
 
-header_name :: Parser PreprocessingToken
+preprocessing_op_or_punc :: Parser PPToken
+preprocessing_op_or_punc = do
+    x <- try (string "{") <|> try (string "}") <|> try (string "[") <|> try (string "]") <|> try (string "#") <|> try (string "##") <|> try (string "(") <|> try (string ")") <|>           
+        try (string "<:") <|> try (string ":>") <|> try (string "<%") <|> try (string "%>") <|> try (string "%:") <|> try (string "%:%:") <|> try (string ";") <|> try (string ":") <|> try (string "...") <|>
+        try (string "new") <|> try (string "delete") <|> try (string "?") <|> try (string "::") <|> try (string ".") <|> try (string ".*") <|>
+        try (string "+") <|> try (string "-") <|> try (string "*") <|> try (string "/") <|> try (string "%") <|> try (string "ˆ") <|> try (string "&") <|> try (string "|") <|> try (string "~") <|>
+        try (string "!") <|> try (string "=") <|> try (string "<") <|> try (string ">") <|> try (string "+=") <|> try (string "-=") <|> try (string "*=") <|> try (string "/=") <|>  try (string "%=") <|>
+        try (string "ˆ=") <|> try (string "&=") <|> try (string "|=") <|> try (string "<<") <|> try (string ">>") <|>  try (string ">>=") <|> try (string "<<=") <|> try (string "==") <|> try (string "!=") <|>
+        try (string "<=") <|> try (string ">=") <|> try (string "&&") <|> try (string "||") <|> try (string "++") <|> try (string "--") <|> try (string ",") <|> try (string "->*") <|> try (string "->") <|>
+        try (string "and") <|> try (string "and_eq") <|> try (string "bitand") <|> try (string "bitor") <|> try (string "compl") <|> try (string "not") <|> try (string "not_eq") <|> 
+        try (string "or") <|> try (string "or_eq") <|> try (string "xor") <|> try (string "xor_eq")
+    return $ PPToken Preprocessing_op_or_punc x
+
+header_name :: Parser PPToken
 header_name = do
     x <- h_header_name <|> q_header_name
-    return $ PreprocessingToken Header_name x
+    return $ PPToken Header_name x
 
 h_header_name :: Parser String
 h_header_name = do
@@ -103,28 +108,28 @@ q_char = noneOf "\n\r\""
 q_char_sequence :: Parser String
 q_char_sequence = many1 q_char
 
-identifier :: Parser PreprocessingToken
+identifier :: Parser PPToken
 identifier = do
     x <- cppNondigit
     y <- many identifier_digit_or_nondigit
-    return $ PreprocessingToken Identifier (x:y)
+    return $ PPToken Identifier (x:y)
 
-pp_number :: Parser PreprocessingToken
+pp_number :: Parser PPToken
 pp_number = do
     x <- cppDigit
     y <- many pp_number_char
-    return $ PreprocessingToken Pp_number (x:y)
+    return $ PPToken Pp_number (x:y)
 
 pp_number_char :: Parser Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
 
-character_literal :: Parser PreprocessingToken
+character_literal :: Parser PPToken
 character_literal = do
     x <- option "" encoding_prefix
     y <- char '\''
     z <- c_char_sequence
     w <- char '\''
-    return $ PreprocessingToken Character_literal (x ++ [y] ++ z ++ [w])
+    return $ PPToken Character_literal (x ++ [y] ++ z ++ [w])
 
 encoding_prefix :: Parser String
 encoding_prefix = try (string "u8") <|> encoding_prefix2
@@ -147,10 +152,10 @@ c_char_char = do
     x <- noneOf ("'\\\n")
     return [x]
 
-string_literal :: Parser PreprocessingToken
+string_literal :: Parser PPToken
 string_literal = do
     x <- (string_literal_s_char_sequence <|> string_literal_raw_string)
-    return $ PreprocessingToken String_literal x
+    return $ PPToken String_literal x
 
 string_literal_s_char_sequence :: Parser String
 string_literal_s_char_sequence = do
@@ -234,36 +239,55 @@ changeWhiteSpaces x
                 | elem '\n' x  = "\n"
                 | otherwise    = " "
 
+--removeComments :: String -> String
+--removeComments = removeOneLineComments . removeMultiLineComments
+
+--removeOneLineComments :: Parser String
+--removeOneLineComments = do
+--    x <- many (noneOf "/")
+--    try (string "//")
+--    oneOf "\n\r"
+
 joinWhitespaces :: Parser String
 joinWhitespaces = do
     x <- many anyCharacter
     eof
     return $ concat x
 
-ppTokenizer :: Parser [PreprocessingToken]
+ppTokenizer :: Parser [PPToken]
 ppTokenizer = do
     x <- many ppTokenizer2
     eof
     return x
 
-ppNonWhite :: Parser PreprocessingToken
+ppNonWhite :: Parser PPToken
 ppNonWhite = do
     x <- noneOf whitespaceChar
-    return $ PreprocessingToken PP_AnythingElse [x]
+    return $ PPToken PP_AnythingElse [x]
 
-ppNewLine :: Parser PreprocessingToken
+ppNewLine :: Parser PPToken
 ppNewLine = do
     x <- oneOf "\n\r"
-    return $ PreprocessingToken PP_NewLine [x] 
+    return $ PPToken PP_NewLine [x] 
 
-ppTokenizer2 :: Parser PreprocessingToken
+ppTokenizer2 :: Parser PPToken
 ppTokenizer2 = do
-    skipMany (oneOf "\r\v ")
-    x <- try header_name <|> try identifier <|> try pp_number <|> try character_literal <|> try string_literal <|> try preprocessing_op_or_punc <|> try ppNonWhite <|> try ppNewLine 
-    return x
+    skipMany (oneOf "\t\v ")
+    x <- try header_name <|> try identifier <|> try pp_number <|>
+         try character_literal <|> try string_literal <|> try pp_comment <|>
+         try preprocessing_op_or_punc <|> try ppNonWhite <|> try ppNewLine 
+    case x of
+        PPToken PP_Comment "/*" -> do
+            manyTill anyChar (try (string "*/"))
+            ppTokenizer2
+        PPToken PP_Comment "//" -> do
+            manyTill anyChar (try ppNewLine)
+            return $ PPToken PP_NewLine "\n"
+        PPToken _ _ -> return x
 
+restringifyTokens :: [PPToken] -> [String]
+restringifyTokens = map text
 
--- TODO: get rid of comments before joinWhitespaces
 main :: IO()
 main = do
     rawText <- readFile "testIn.cpp"
@@ -289,3 +313,6 @@ main = do
                             putStr "\nPP TOKENS BEGIN\n"
                             print tokens
                             putStr "\nPP TOKENS END\n"
+                            putStr "\nREPRINT BEGIN\n"
+                            putStr $ concatWith " " $ restringifyTokens tokens
+                            putStr "\nREPRINT END\n"
