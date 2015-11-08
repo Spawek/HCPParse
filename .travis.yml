@@ -67,18 +67,8 @@ sudo: false
 install:
  - export PATH="/opt/cabal/$CABALVER/bin:/opt/ghc/$GHCVER/bin:$PATH"
 
-before_script:
-  - cabal --version
-  - cabal update
-  - ghc --version
-  - ghc-pkg list
-  - cabal install --enable-test
-
 script:
   - cabal configure --enable-tests && cabal build && cabal test
-
-after_script:
- - ghc-pkg list
 
 notifications:
   on_success: change
