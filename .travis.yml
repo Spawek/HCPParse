@@ -4,6 +4,7 @@ sudo: false
 
 install:
   - export PATH="/opt/cabal/$CABALVER/bin:/opt/ghc/$GHCVER/bin:$PATH"
+  - cabal sandbox init
   - cabal install --only-dependencies --enable-test
 
 script:
