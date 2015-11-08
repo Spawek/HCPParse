@@ -72,6 +72,7 @@ before_script:
   - cabal update
   - ghc --version
   - ghc-pkg list
+  - cabal install --enable-test
 
 script:
   - cabal configure --enable-tests && cabal build && cabal test
