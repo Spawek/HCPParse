@@ -17,3 +17,8 @@ install:
 
 script:
   - cabal configure --enable-tests && cabal build && cabal test
+
+notifications:
+  on_success: change
+  on_failure: always
+  on_start: false
