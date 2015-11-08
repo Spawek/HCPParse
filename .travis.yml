@@ -1,2 +1,4 @@
-ghc: 7.4
+sudo: false
+language: haskell
+ghc: 7.6.3
 
