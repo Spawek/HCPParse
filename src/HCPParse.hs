@@ -41,12 +41,12 @@ data PPTokenType =
     PP_NewLine |
     PP_AnythingElse |
     PP_Comment
-    deriving (Show)
+    deriving (Show, Eq)
 
 data PPToken = PPToken {
     tokenType :: PPTokenType,
     text :: String
-} deriving (Show)
+} deriving (Show, Eq)
 
 cppNondigit :: Parser Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
@@ -65,17 +65,15 @@ pp_comment = do
     x <- try(string "/*") <|> try(string "//")
     return $ PPToken PP_Comment x
 
+-- punctors which are suffix of other punctors should be at the end of list
+punctors_list = ["{", "}", "[", "]", "#", "##", "(", ")", "<:", ":>", "<%", "%>", "%:%:", "%:", ";", ":", "...", "new", "delete", "?", "::", "+=", "-=", "*=", "/=", "%=", "ˆ=", "&=", "|=", "<<", ">>", ">>=", "<<=", "==", "!=", "<=", ">=", "&&", "||", "++", "--", ",", "->*", "->", ".", ".*", "+", "-", "*", "/", "%", "ˆ", "&", "|", "~", "!", "=", "<", ">", "and", "and_eq", "bitand", "bitor", "compl", "not", "not_eq", "or", "or_eq", "xor", "xor_eq"]
+preprocessing_op_or_punc2 :: [String] -> Parser String
+preprocessing_op_or_punc2 [x] = try (string x)
+preprocessing_op_or_punc2 (x:xs) = try (string x) <|> (preprocessing_op_or_punc2 xs)
+
 preprocessing_op_or_punc :: Parser PPToken
 preprocessing_op_or_punc = do
-    x <- try (string "{") <|> try (string "}") <|> try (string "[") <|> try (string "]") <|> try (string "#") <|> try (string "##") <|> try (string "(") <|> try (string ")") <|>           
-        try (string "<:") <|> try (string ":>") <|> try (string "<%") <|> try (string "%>") <|> try (string "%:") <|> try (string "%:%:") <|> try (string ";") <|> try (string ":") <|> try (string "...") <|>
-        try (string "new") <|> try (string "delete") <|> try (string "?") <|> try (string "::") <|> try (string ".") <|> try (string ".*") <|>
-        try (string "+") <|> try (string "-") <|> try (string "*") <|> try (string "/") <|> try (string "%") <|> try (string "ˆ") <|> try (string "&") <|> try (string "|") <|> try (string "~") <|>
-        try (string "!") <|> try (string "=") <|> try (string "<") <|> try (string ">") <|> try (string "+=") <|> try (string "-=") <|> try (string "*=") <|> try (string "/=") <|>  try (string "%=") <|>
-        try (string "ˆ=") <|> try (string "&=") <|> try (string "|=") <|> try (string "<<") <|> try (string ">>") <|>  try (string ">>=") <|> try (string "<<=") <|> try (string "==") <|> try (string "!=") <|>
-        try (string "<=") <|> try (string ">=") <|> try (string "&&") <|> try (string "||") <|> try (string "++") <|> try (string "--") <|> try (string ",") <|> try (string "->*") <|> try (string "->") <|>
-        try (string "and") <|> try (string "and_eq") <|> try (string "bitand") <|> try (string "bitor") <|> try (string "compl") <|> try (string "not") <|> try (string "not_eq") <|> 
-        try (string "or") <|> try (string "or_eq") <|> try (string "xor") <|> try (string "xor_eq")
+    x <- preprocessing_op_or_punc2 punctors_list
     return $ PPToken Preprocessing_op_or_punc x
 
 header_name :: Parser PPToken

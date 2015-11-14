@@ -5,15 +5,6 @@ import HCPParse
 import Test.Hspec
 import Text.ParserCombinators.Parsec
 
--- to run test:
---   "hspec spec"
-
--- main = do
---     putStrLn "This test always pass!"
---     exitSuccess
---     -- exitFailure
---     -- putStrLn "This test always fails!"
-
 shouldParse :: (Eq a) => (Parser a) -> String -> a -> Bool
 shouldParse parser input expectedOutput =
     case (parse parser "err" input) of
@@ -36,7 +27,18 @@ spec = do
         it "shouldn't parse '4'" $
             shoudNotParse cppNondigit "4"
 
-        -- `shouldBe` (Left (ParseError "err"))
+    describe "cppDigit" $ do
+        it "should parse '6'" $
+            shouldParse cppDigit "6" '6'
+        it "shouldn't parse 'f'" $
+            shoudNotParse cppDigit "f"
+
+    describe "preprocessing_op_or_punc" $ do
+        it "should parse '<='" $
+            shouldParse preprocessing_op_or_punc "<=" (PPToken Preprocessing_op_or_punc "<=")
+        it  "shouldn't parse 'xxx'" $
+            shoudNotParse preprocessing_op_or_punc "xxx"
+           
 
 main :: IO ()
 main = hspec spec
