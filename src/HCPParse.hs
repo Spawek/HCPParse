@@ -86,14 +86,14 @@ h_header_name = do
     char '<'
     name <- h_char_sequence 
     char '>'
-    return name
+    return $ "<" ++ name ++ ">"
 
 q_header_name :: Parser String
 q_header_name = do
     char '\"'
     name <- q_char_sequence 
     char '\"'
-    return name
+    return $ "\"" ++ name ++ "\""
 
 h_char :: Parser Char
 h_char = noneOf "\n\r>"
