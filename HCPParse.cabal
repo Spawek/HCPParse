@@ -32,8 +32,9 @@ Library
 Test-Suite test-parse
     type:               exitcode-stdio-1.0
     default-language:   Haskell2010
-    main-is:            Tests.hs
+    main-is:            Spec.hs
     hs-source-dirs:     test
+    other-modules:      ParserTests
     -- GHC-Options:        -Wall
     build-depends:      base,
                         hspec >= 1.3,
