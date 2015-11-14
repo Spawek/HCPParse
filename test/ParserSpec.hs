@@ -1,10 +1,9 @@
-module ParserTests where
+module ParserSpec where
 
 import System.Exit (exitFailure , exitSuccess)
 import HCPParse
 import Test.Hspec
 import Text.ParserCombinators.Parsec
-import Text.ParserCombinators.Parsec.Error
 
 -- to run test:
 --   "hspec spec"
@@ -39,6 +38,7 @@ spec = do
 
         -- `shouldBe` (Left (ParseError "err"))
 
-
+main :: IO ()
+main = hspec spec
 
 
