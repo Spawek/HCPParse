@@ -49,7 +49,15 @@ spec = do
         it "shouldn't parse 'TestName'" $
             shouldNotParse header_name "TestName"
 
-           
+    describe "character_literal" $ do
+        it "should parse 'abcdef'" $
+            shouldParse character_literal "'abcdef'" 
+                (PPToken Character_literal "'abcdef'")
+        it "should parse U'abcdef'" $
+            shouldParse character_literal "U'abcdef'" 
+                (PPToken Character_literal "U'abcdef'")
+        it "shouldn't parse 'xxx'" $
+            shouldNotParse character_literal "xxx"
 
 main :: IO ()
 main = hspec spec
