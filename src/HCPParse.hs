@@ -153,7 +153,7 @@ c_char_char = do
 
 string_literal :: Parser PPToken
 string_literal = do
-    x <- (string_literal_s_char_sequence <|> string_literal_raw_string)
+    x <- string_literal_s_char_sequence <|> string_literal_raw_string
     return $ PPToken String_literal x
 
 string_literal_s_char_sequence :: Parser String

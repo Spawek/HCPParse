@@ -56,8 +56,29 @@ spec = do
         it "should parse U'abcdef'" $
             shouldParse character_literal "U'abcdef'" 
                 (PPToken Character_literal "U'abcdef'")
-        it "shouldn't parse 'xxx'" $
+        it "should parse u8'abcdef'" $
+            shouldParse character_literal "u8'abcdef'" 
+                (PPToken Character_literal "u8'abcdef'")
+        it "shouldn't parse xxx'" $
             shouldNotParse character_literal "xxx"
+        it "shouldn't parse u5'xxx'" $
+            shouldNotParse character_literal "u5'xxx'"
+
+    describe "string_literal" $ do
+        it "should parse \"abc\"" $
+            shouldParse string_literal "\"abc\""
+                (PPToken String_literal "\"abc\"")
+        it "should parse U\"abc\"" $
+            shouldParse string_literal "U\"abc\""
+                (PPToken String_literal "U\"abc\"")
+        it "should parse R\"asd(123\\n)asd\"" $
+            shouldParse string_literal "R\"asd(123\\n)asd\""  
+                (PPToken String_literal "R\"asd(123\\n)asd\"")
+        it "should't parse R\"xxx(123)yyy\"" $
+            shouldNotParse string_literal "R\"xxx(123)yyy\""
+        it "shouldn't parse xxx" $
+            shouldNotParse string_literal "xxx"
+
 
 main :: IO ()
 main = hspec spec
