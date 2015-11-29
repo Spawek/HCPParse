@@ -238,15 +238,6 @@ changeWhiteSpaces x
                 | elem '\n' x  = "\n"
                 | otherwise    = " "
 
---removeComments :: String -> String
---removeComments = removeOneLineComments . removeMultiLineComments
-
---removeOneLineComments :: Parser String
---removeOneLineComments = do
---    x <- many (noneOf "/")
---    try (string "//")
---    oneOf "\n\r"
-
 joinWhitespaces :: Parser String
 joinWhitespaces = do
     x <- many anyCharacter
