@@ -231,18 +231,24 @@ notEOL = many notEOLHelp
 notEOLHelp :: Parser Char
 notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r")
 
-whitespaceChar :: [Char]
-whitespaceChar = "\n\r\t\v " -- NOT FROM STANDARD
+whiteSpaceChar :: [Char]
+whiteSpaceChar = "\n\r\t\v " -- NOT FROM STANDARD
+
+consecutiveWhiteSpaceChars :: Parser String
+consecutiveWhiteSpaceChars = do
+    x <- many (oneOf whiteSpaceChar)
+    return $ (joinWhiteSpaces x)
 
 anyCharacter :: Parser String
 anyCharacter = do
-    white <- many (oneOf whitespaceChar)
-    nonWhite <- many1 (noneOf whitespaceChar)
-    return $ (changeWhiteSpaces white) ++ nonWhite
+    white1 <- consecutiveWhiteSpaceChars
+    nonWhite <- many1 (noneOf whiteSpaceChar) <?> "non whitespace"
+    white2 <- consecutiveWhiteSpaceChars
+    return $ white1 ++ nonWhite ++ white2
 
-changeWhiteSpaces :: String -> String
-changeWhiteSpaces [] = []
-changeWhiteSpaces x 
+joinWhiteSpaces :: String -> String
+joinWhiteSpaces [] = []
+joinWhiteSpaces x 
                 | elem '\n' x  = "\n"
                 | otherwise    = " "
 
@@ -255,12 +261,12 @@ joinWhitespaces = do
 ppTokenizer :: Parser [PPToken]
 ppTokenizer = do
     x <- many ppTokenizer2
-    eof
+    eof <?> "expected eof"
     return x
 
 ppNonWhite :: Parser PPToken
 ppNonWhite = do
-    x <- noneOf whitespaceChar
+    x <- noneOf whiteSpaceChar
     return $ PPToken PP_AnythingElse [x]
 
 ppNewLine :: Parser PPToken

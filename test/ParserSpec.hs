@@ -79,6 +79,15 @@ spec = do
         it "shouldn't parse xxx" $
             shouldNotParse string_literal "xxx"
 
+    describe "joinWhitespaces" $ do
+        it "should parse 'abc'" $
+            shouldParse joinWhitespaces "abc" "abc"
+        it "should parse 'abc '" $
+            shouldParse joinWhitespaces "abc " "abc "
+        it "should parse ''" $
+            shouldParse joinWhitespaces "" ""
+        -- it "should parse ' '" $
+        --     shouldParse joinWhitespaces " " " "
 
 main :: IO ()
 main = hspec spec
