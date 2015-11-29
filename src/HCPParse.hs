@@ -219,11 +219,19 @@ simple_escape_sequence = do
     y <- oneOf("’\"?\\abfnrtv")
     return $ x:[y]
 
+cppLines :: Parser [String]
 cppLines = endBy notEOL eolChar
+
+eolChar :: Parser Char
 eolChar = oneOf ("\n\r")
+
+notEOL :: Parser String
 notEOL = many notEOLHelp
+
+notEOLHelp :: Parser Char
 notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r")
 
+whitespaceChar :: [Char]
 whitespaceChar = "\n\r\t\v " -- NOT FROM STANDARD
 
 anyCharacter :: Parser String
