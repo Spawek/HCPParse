@@ -86,8 +86,12 @@ spec = do
             shouldParse joinWhitespaces "abc " "abc "
         it "should parse ''" $
             shouldParse joinWhitespaces "" ""
-        -- it "should parse ' '" $
-        --     shouldParse joinWhitespaces " " " "
+        it "should parse ' '" $
+            shouldParse joinWhitespaces " " " "
+        it "should parse '       '" $
+            shouldParse joinWhitespaces "       " " "
+        it "should parse '  \\n\\n\\n  x  \\n\\n\\n     '" $
+            shouldParse joinWhitespaces "  \n\n\n  x  \n\n\n     " "\nx\n"
 
 main :: IO ()
 main = hspec spec

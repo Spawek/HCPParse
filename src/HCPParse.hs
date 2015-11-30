@@ -236,21 +236,17 @@ whiteSpaceChar = "\n\r\t\v " -- NOT FROM STANDARD
 
 consecutiveWhiteSpaceChars :: Parser String
 consecutiveWhiteSpaceChars = do
-    x <- many (oneOf whiteSpaceChar)
+    x <- many1 (oneOf whiteSpaceChar)
     return $ (joinWhiteSpaces x)
-
-anyCharacter :: Parser String
-anyCharacter = do
-    white1 <- consecutiveWhiteSpaceChars
-    nonWhite <- many1 (noneOf whiteSpaceChar) <?> "non whitespace"
-    white2 <- consecutiveWhiteSpaceChars
-    return $ white1 ++ nonWhite ++ white2
 
 joinWhiteSpaces :: String -> String
 joinWhiteSpaces [] = []
 joinWhiteSpaces x 
                 | elem '\n' x  = "\n"
                 | otherwise    = " "
+
+anyCharacter :: Parser String
+anyCharacter = consecutiveWhiteSpaceChars <|> (many1 (noneOf whiteSpaceChar))
 
 joinWhitespaces :: Parser String
 joinWhitespaces = do
@@ -261,7 +257,7 @@ joinWhitespaces = do
 ppTokenizer :: Parser [PPToken]
 ppTokenizer = do
     x <- many ppTokenizer2
-    eof <?> "expected eof"
+    eof
     return x
 
 ppNonWhite :: Parser PPToken
