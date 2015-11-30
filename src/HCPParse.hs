@@ -46,7 +46,10 @@ data PPTokenType =
 data PPToken = PPToken {
     tokenType :: PPTokenType,
     text :: String
-} deriving (Show, Eq)
+} deriving (Eq)
+
+instance Show PPToken where
+    show (PPToken tokenType text) = "(" ++ show tokenType ++ " : " ++ show text ++ ")"
 
 cppNondigit :: Parser Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"

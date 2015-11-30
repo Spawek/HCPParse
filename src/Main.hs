@@ -18,7 +18,7 @@ main = do
         Left err -> print $ "tokenizer error: " ++ show err
         Right tokens -> do
             putStr "\nPP TOKENS BEGIN\n"
-            print tokens
+            putStr $ concatWith "\n" $ map show tokens
             putStr "\nPP TOKENS END\n"
             putStr "\nREPRINT BEGIN\n"
             putStr $ concatWith " " $ restringifyTokens tokens
