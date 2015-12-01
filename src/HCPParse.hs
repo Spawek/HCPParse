@@ -1,10 +1,15 @@
 module HCPParse where
 
+-- this is version 2 of parsec
 import Text.ParserCombinators.Parsec
+
+
 import System.Environment
 import Data.Either.Unwrap
 import Data.List
 
+-- use this one!
+import qualified Text.Parsec as PC
 -- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
 
 -- nice links:
@@ -50,6 +55,46 @@ data PPToken = PPToken {
 
 instance Show PPToken where
     show (PPToken tokenType text) = "(" ++ show tokenType ++ " : " ++ show text ++ ")"
+
+
+-- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
+oneOfT :: (Eq t, Show t, PC.Stream s m t) => [t] -> PC.ParsecT s u m t
+oneOfT ts = satisfyT (`elem` ts)
+
+noneOfT :: (Eq t, Show t, PC.Stream s m t) => [t] -> PC.ParsecT s u m t
+noneOfT ts = satisfyT (not . (`elem` ts))
+
+anyT :: (Show t, PC.Stream s m t) => PC.ParsecT s u m t
+anyT = satisfyT (const True)
+
+satisfyT :: (Show t, PC.Stream s m t) => (t -> Bool) -> PC.ParsecT s u m t
+satisfyT p = tokenPrim showTok nextPos testTok
+    where
+      showTok t     = show t
+      testTok t     = if p t then Just t else Nothing
+      nextPos p t s = p
+
+-- xxx :: Parser [PPToken]
+-- xxx = many1 primIdentifier
+
+-- primIdentifier :: Parser PPToken
+-- primIdentifier = tokenPrim show update_pos get_num where 
+--     get_num x@(PPToken Identifier _) = Just x
+--     get_num _ = Nothing
+
+-- identifierPrimitive x = token showTok posFromTok testTok
+--     where showTok (pos, t) = show t
+--           posFromTok (pos, t) = pos
+--           testTok (pos, t) = if t == x then Just t else Nothing
+
+-- fistTokenParser :: Parser PPToken
+-- fistTokenParser = do
+--     x <- (identifierPrimitive (PPToken Identifier "dsaasd"))
+--     -- eof
+--     return x
+
+-- update_pos :: SourcePos -> PPToken -> [PPToken] -> SourcePos
+-- update_pos pos (PPToken _ _) (x:xs) = pos
 
 cppNondigit :: Parser Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
