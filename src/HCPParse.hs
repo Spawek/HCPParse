@@ -2,7 +2,7 @@ module HCPParse where
 
 -- this is version 2 of parsec
 import Text.ParserCombinators.Parsec
-
+import Control.Applicative hiding ((<|>), many)
 
 import System.Environment
 import Data.Either.Unwrap
@@ -199,10 +199,17 @@ c_char_char = do
     x <- noneOf ("'\\\n")
     return [x]
 
+
+-- TODO change all the code to look like this one
 string_literal :: Parser PPToken
-string_literal = do
-    x <- string_literal_s_char_sequence <|> string_literal_raw_string
-    return $ PPToken String_literal x
+string_literal = (PPToken String_literal) <$> (string_literal_s_char_sequence <|> string_literal_raw_string)
+
+
+
+-- string_literal :: Parser PPToken
+-- string_literal = do
+--     x <- string_literal_s_char_sequence <|> string_literal_raw_string
+--     return $ PPToken String_literal x
 
 string_literal_s_char_sequence :: Parser String
 string_literal_s_char_sequence = do
@@ -309,9 +316,9 @@ ppTokenizer = do
     return x
 
 ppNonWhite :: Parser PPToken
-ppNonWhite = do
+ppNonWhite = PPToken PP_AnythingElse do
     x <- noneOf whiteSpaceChar
-    return $ PPToken PP_AnythingElse [x]
+    return $ [x]
 
 ppNewLine :: Parser PPToken
 ppNewLine = do
