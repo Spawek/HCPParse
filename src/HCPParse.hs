@@ -22,16 +22,6 @@ import Text.Parsec
 --        a) preprocessing tokenizer
 --        b) ...
 
--- NOTE: GenStream s m Char => ParsecT s u m Char st String - "st" means state actually - I can use of it somehow
-
---data RawLine = RawLine {
---    lineContent :: String,
---    lineNo :: Int,
---    col :: Int
---} deriving (Show)
-
---update_pos :: SourcePos -> RawLine -> [RawLine] -> SourcePos
---update_pos pos _ _ = pos
 
 -- as in C++14 standard
 data PPTokenType = 
@@ -55,7 +45,6 @@ data PPToken = PPToken {
 
 instance Show PPToken where
     show (PPToken tokenType text) = "(" ++ show tokenType ++ " : " ++ show text ++ ")"
-
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
 oneOfT :: (Eq t, Show t, Stream s m t) => [t] -> ParsecT s u m t
@@ -189,7 +178,6 @@ c_char_char = do
 -- string_literal :: Stream s m Char => ParsecT s u m PPToken
 -- string_literal = (PPToken String_literal) <$>
 --     (string_literal_s_char_sequence <|> string_literal_raw_string)
-
 
 string_literal :: Stream s m Char => ParsecT s u m PPToken
 string_literal = PPToken String_literal <$> do
