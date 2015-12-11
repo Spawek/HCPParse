@@ -8,16 +8,7 @@ import System.Environment
 import Data.Either.Unwrap
 import Data.List
 
--- ========================================
 import Text.Parsec
--- By default this module is set up to parse character data. If you'd like to parse the result of your own tokenizer you should start with the following imports:
-
---  import Text.Parsec.Prim
---  import Text.Parsec.Combinator
--- Then you can implement your own version of satisfy on top of the tokenPrim primitive.
--- ========================================
-import Text.Parsec.Char
-
 
 -- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
 
@@ -150,27 +141,27 @@ q_char_sequence :: Stream s m Char => ParsecT s u m String
 q_char_sequence = many1 q_char
 
 identifier :: Stream s m Char => ParsecT s u m PPToken
-identifier = do
+identifier = PPToken Identifier <$> do
     x <- cppNondigit
     y <- many identifier_digit_or_nondigit
-    return $ PPToken Identifier (x:y)
+    return (x:y)
 
 pp_number :: Stream s m Char => ParsecT s u m PPToken
-pp_number = do
+pp_number = PPToken Pp_number <$> do
     x <- cppDigit
     y <- many pp_number_char
-    return $ PPToken Pp_number (x:y)
+    return (x:y)
 
 pp_number_char :: Stream s m Char => ParsecT s u m Char
 pp_number_char = cppDigit <|> cppNondigit <|> oneOf(".'")
 
 character_literal :: Stream s m Char => ParsecT s u m PPToken
-character_literal = do
+character_literal = PPToken Character_literal <$> do
     x <- option "" encoding_prefix
     y <- char '\''
     z <- c_char_sequence
     w <- char '\''
-    return $ PPToken Character_literal (x ++ [y] ++ z ++ [w])
+    return $ x ++ [y] ++ z ++ [w]
 
 encoding_prefix :: Stream s m Char => ParsecT s u m String
 encoding_prefix = try (string "u8") <|> encoding_prefix2
@@ -201,9 +192,9 @@ c_char_char = do
 
 
 string_literal :: Stream s m Char => ParsecT s u m PPToken
-string_literal = do
+string_literal = PPToken String_literal <$> do
     x <- string_literal_s_char_sequence <|> string_literal_raw_string
-    return $ PPToken String_literal x
+    return x
 
 string_literal_s_char_sequence :: Stream s m Char => ParsecT s u m String
 string_literal_s_char_sequence = do
@@ -312,12 +303,12 @@ ppTokenizer = do
 ppNonWhite :: Stream s m Char => ParsecT s u m PPToken
 ppNonWhite = PPToken PP_AnythingElse <$> do
     x <- noneOf whiteSpaceChar
-    return $ [x]
+    return [x]
 
 ppNewLine :: Stream s m Char => ParsecT s u m PPToken
-ppNewLine = do
+ppNewLine = PPToken PP_NewLine <$> do
     x <- oneOf "\n\r"
-    return $ PPToken PP_NewLine [x] 
+    return [x] 
 
 ppTokenizer2 :: Stream s m Char => ParsecT s u m PPToken
 ppTokenizer2 = do
