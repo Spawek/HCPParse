@@ -1,13 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module HCPParse where
+module HCPParse where 
 
 import Control.Applicative hiding ((<|>), many)
-
 import System.Environment
 import Data.Either.Unwrap
 import Data.List
-
 import Text.Parsec
 
 -- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
@@ -247,17 +245,14 @@ simple_escape_sequence = do
     y <- oneOf("’\"?\\abfnrtv")
     return $ x:[y]
 
-cppLines :: Stream s m Char => ParsecT s u m [String]
-cppLines = endBy notEOL eolChar
+cppLines :: Stream s m Char => ParsecT s u m String
+cppLines = do
+    x <- many cutSlashEndlines
+    eof
+    return x
 
-eolChar :: Stream s m Char => ParsecT s u m Char
-eolChar = oneOf ("\n\r")
-
-notEOL :: Stream s m Char => ParsecT s u m String
-notEOL = many notEOLHelp
-
-notEOLHelp :: Stream s m Char => ParsecT s u m Char
-notEOLHelp = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> (noneOf "\n\r")
+cutSlashEndlines :: Stream s m Char => ParsecT s u m Char
+cutSlashEndlines = try (char '\\' >> oneOf("\n\r") >> anyChar) <|> anyChar
 
 whiteSpaceChar :: [Char]
 whiteSpaceChar = "\n\r\t\v " -- NOT FROM STANDARD
@@ -270,7 +265,7 @@ consecutiveWhiteSpaceChars = do
 joinWhiteSpaces :: String -> String
 joinWhiteSpaces [] = []
 joinWhiteSpaces x 
-                | elem '\n' x  = "\n"
+                | (elem '\n' x) || (elem '\r' x) = "\n"
                 | otherwise    = " "
 
 anyCharacter :: Stream s m Char => ParsecT s u m String
@@ -315,3 +310,61 @@ ppTokenizer2 = do
 
 restringifyTokens :: [PPToken] -> [String]
 restringifyTokens = map text
+
+ppTokenize rawText = do
+    parsedLines <- parse cppLines "((UNKNOWN CPPLINES))" rawText
+    preparedForPp <- parse joinWhitespaces "((WHITESPACE JOIN))" parsedLines
+    tokens <- parse ppTokenizer "((UNKNOWN PREPROC))" preparedForPp
+    return tokens
+
+-- ppDirective jest na poczatku lini
+
+-- PPFile = opt PPGroup
+-- PPGroup = [PPGroupPart] - at least one
+-- so PPFile = [PPGroupPart] -- 0 or more
+
+type PPFile = [PPGroupPart]
+
+data PPGroupPart = PPGroupPart{
+    groupType :: PPGroupPartType,
+    groupTokens :: [PPToken]
+}  deriving (Eq, Show)
+
+data PPGroupPartType =
+    If_section |
+    Control_line |
+    Text_line |
+    Non_directive
+    deriving (Eq, Show)
+
+-- NOTE: only #ifndef supported for now
+ifGroup :: Stream s m PPToken => ParsecT s u m [PPToken]
+ifGroup = do
+    x <- matchToken Preprocessing_op_or_punc "#"
+    y <- matchToken Identifier "ifndef"
+    identifier <- matchTokenType Identifier
+    matchTokenType PP_NewLine
+    return $ [x, y, identifier]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

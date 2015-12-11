@@ -22,6 +22,11 @@ shouldNotParse parser input =
         Left _ -> True
         Right _ -> False
 
+quickParse :: [Char] -> [PPToken]
+quickParse x = case ppTokenize x of
+    Right result -> result
+    Left err -> error $ "wrong quickParse for: '" ++ x ++ "'"
+
 spec :: Spec
 spec = do
     describe "cppNondigit" $ do
@@ -113,6 +118,24 @@ spec = do
             shouldNotParse (matchToken Identifier "abc") [PPToken Header_name "abc"]
         it "shouldn't match different text" $
             shouldNotParse (matchToken Identifier "abc") [PPToken Identifier "xxx"]
+
+    -- TODO: maybe all tests should use ppTokenize - so it'll be easie to do changes in code
+
+    -- TODO: refactor it!
+    describe "ppTokenize" $ do
+        it "should parse single line file" $
+            case ppTokenize "#" of
+                Right x -> x == [PPToken Preprocessing_op_or_punc "#"]
+                Left _ -> False
+        it "should parse multi line file" $
+            case ppTokenize "#\n" of
+                Right x -> x == [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
+                Left _ -> False
+
+    -- describe "ifGroup" $ do
+    --     it "should match '#ifndef ABC'" $
+    --         shouldParse ifGroup $ quickParse "#ifndef ABC" $ 
+    --             []
 
 main :: IO ()
 main = hspec spec
