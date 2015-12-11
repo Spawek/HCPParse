@@ -1,11 +1,14 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module ParserSpec where
 
 import System.Exit (exitFailure , exitSuccess)
 import HCPParse
 import Test.Hspec
-import Text.ParserCombinators.Parsec
+import Text.Parsec
+import Data.Functor.Identity
 
-shouldParse :: (Eq a) => (Parser a) -> String -> a -> Bool
+shouldParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> a -> Bool
 shouldParse parser input expectedOutput =
     case (parse parser "err" input) of
         Left _ -> False
@@ -13,7 +16,7 @@ shouldParse parser input expectedOutput =
             if output == expectedOutput then True
             else False
 
-shouldNotParse :: (Parser a) -> String -> Bool
+shouldNotParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> Bool
 shouldNotParse parser input =
     case (parse parser "err" input) of
         Left _ -> True
@@ -92,6 +95,24 @@ spec = do
             shouldParse joinWhitespaces "       " " "
         it "should parse '  \\n\\n\\n  x  \\n\\n\\n     '" $
             shouldParse joinWhitespaces "  \n\n\n  x  \n\n\n     " "\nx\n"
+
+    describe "matchTokenType" $ do
+        it "should match same token type" $
+            shouldParse (matchTokenType Identifier) [PPToken Identifier "abc"]
+                (PPToken Identifier "abc")
+        it "shouldn't parse different token type" $
+            shouldNotParse (matchTokenType Identifier) [PPToken Header_name "abc"] 
+        it "shouldn't parse different empty list" $
+            shouldNotParse (matchTokenType Identifier) []
+
+    describe "matchToken" $ do
+        it "should match same token" $
+            shouldParse (matchToken Identifier "abc") [PPToken Identifier "abc"]
+                (PPToken Identifier "abc")
+        it "shouldn't match different type" $
+            shouldNotParse (matchToken Identifier "abc") [PPToken Header_name "abc"]
+        it "shouldn't match different text" $
+            shouldNotParse (matchToken Identifier "abc") [PPToken Identifier "xxx"]
 
 main :: IO ()
 main = hspec spec

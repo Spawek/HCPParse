@@ -67,43 +67,28 @@ instance Show PPToken where
 
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
--- oneOfT :: (Eq t, Show t, PC.Stream s m t) => [t] -> PC.ParsecT s u m t
--- oneOfT ts = satisfyT (`elem` ts)
+oneOfT :: (Eq t, Show t, Stream s m t) => [t] -> ParsecT s u m t
+oneOfT ts = satisfyT (`elem` ts)
 
--- noneOfT :: (Eq t, Show t, PC.Stream s m t) => [t] -> PC.ParsecT s u m t
--- noneOfT ts = satisfyT (not . (`elem` ts))
+noneOfT :: (Eq t, Show t, Stream s m t) => [t] -> ParsecT s u m t
+noneOfT ts = satisfyT (not . (`elem` ts))
 
--- anyT :: (Show t, PC.Stream s m t) => PC.ParsecT s u m t
--- anyT = satisfyT (const True)
+anyT :: (Show t, Stream s m t) => ParsecT s u m t
+anyT = satisfyT (const True)
 
--- satisfyT :: (Show t, PC.Stream s m t) => (t -> Bool) -> PC.ParsecT s u m t
--- satisfyT p = tokenPrim showTok nextPos testTok
---     where
---       showTok t     = show t
---       testTok t     = if p t then Just t else Nothing
---       nextPos p t s = p
+satisfyT :: (Show t, Stream s m t) => (t -> Bool) -> ParsecT s u m t
+satisfyT p = tokenPrim showTok nextPos testTok
+    where
+      showTok t     = show t
+      testTok t     = if p t then Just t else Nothing
+      nextPos p t s = p  -- NOTE: position is not really passed
 
--- xxx :: Parser [PPToken]
--- xxx = many1 primIdentifier
+matchTokenType :: (Stream s m PPToken) => PPTokenType -> ParsecT s u m PPToken
+matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType))
 
--- primIdentifier :: Stream s m Char => ParsecT s u m PPToken
--- primIdentifier = tokenPrim show update_pos get_num where 
---     get_num x@(PPToken Identifier _) = Just x
---     get_num _ = Nothing
-
--- identifierPrimitive x = token showTok posFromTok testTok
---     where showTok (pos, t) = show t
---           posFromTok (pos, t) = pos
---           testTok (pos, t) = if t == x then Just t else Nothing
-
--- fistTokenParser :: Stream s m Char => ParsecT s u m PPToken
--- fistTokenParser = do
---     x <- (identifierPrimitive (PPToken Identifier "dsaasd"))
---     -- eof
---     return x
-
--- update_pos :: SourcePos -> PPToken -> [PPToken] -> SourcePos
--- update_pos pos (PPToken _ _) (x:xs) = pos
+-- TODO: can be optimized for speed (don't create new token)
+matchToken :: (Stream s m PPToken) => PPTokenType -> String -> ParsecT s u m PPToken
+matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText))  
 
 cppNondigit :: Stream s m Char => ParsecT s u m Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
