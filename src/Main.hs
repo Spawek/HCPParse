@@ -1,6 +1,6 @@
 import HCPParse
-import Lib.Util(concatWith)
 import Text.ParserCombinators.Parsec
+import Lib.Util (concatWith)
 
 main :: IO()
 main = do
