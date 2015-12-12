@@ -27,6 +27,12 @@ quickParse x = case ppTokenize x of
     Right result -> result
     Left err -> error $ "wrong quickParse for: '" ++ x ++ "'"
 
+ppTokenizeShouldParse :: String -> [PPToken] -> Bool
+ppTokenizeShouldParse input expectedOutput =
+    case ppTokenize input of
+        Right x -> x == expectedOutput
+        Left _ -> False
+
 spec :: Spec
 spec = do
     describe "cppNondigit" $ do
@@ -119,30 +125,19 @@ spec = do
         it "shouldn't match different text" $
             shouldNotParse (matchToken Identifier "abc") [PPToken Identifier "xxx"]
 
-    -- TODO: maybe all tests should use ppTokenize - so it'll be easie to do changes in code
-
-    -- TODO: refactor it!
     describe "ppTokenize" $ do
         it "should parse single line file" $
-            case ppTokenize "#" of
-                Right x -> x == [PPToken Preprocessing_op_or_punc "#"]
-                Left _ -> False
+            ppTokenizeShouldParse "#" [PPToken Preprocessing_op_or_punc "#"]
         it "should parse multi line file" $
-            case ppTokenize "#\n" of
-                Right x -> x == [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
-                Left _ -> False
+            ppTokenizeShouldParse "#\n"
+                [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
         it "should parse text with whitespace at the end" $
-            case ppTokenize "# \n" of
-                Right x -> x == [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
-                Left _ -> False
+            ppTokenizeShouldParse "# \n"
+                [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
         it "should parse empty text" $
-            case ppTokenize "" of
-                Right x -> x == []
-                Left _ -> False
+            ppTokenizeShouldParse "" []
         it "should parse whitespace" $
-            case ppTokenize " " of
-                Right x -> x == []
-                Left _ -> False
+            ppTokenizeShouldParse " " []
 
     -- describe "ifGroup" $ do
     --     it "should match '#ifndef ABC'" $

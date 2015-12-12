@@ -7,6 +7,7 @@ import System.Environment
 import Data.Either.Unwrap
 import Data.List
 import Text.Parsec
+import Data.Functor.Identity
 
 -- TODO: rewrite 1) to just remove slash endlines - not split to lines - its quite useless and im doing it back in a while
 
@@ -316,6 +317,7 @@ ppTokenizer2 = do
 restringifyTokens :: [PPToken] -> [String]
 restringifyTokens = map text
 
+ppTokenize :: Stream s Identity Char => s -> Either ParseError [PPToken]
 ppTokenize rawText = do
     parsedLines <- parse cppLines "((UNKNOWN CPPLINES))" rawText
     preparedForPp <- parse joinWhitespaces "((WHITESPACE JOIN))" parsedLines
