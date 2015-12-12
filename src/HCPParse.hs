@@ -277,8 +277,12 @@ joinWhitespaces = do
     eof
     return $ concat x
 
+notEndlineWhiteSpace :: Stream s m Char => ParsecT s u m Char
+notEndlineWhiteSpace = oneOf "\t\v "
+
 ppTokenizer :: Stream s m Char => ParsecT s u m [PPToken]
 ppTokenizer = do
+    skipMany notEndlineWhiteSpace
     x <- many ppTokenizer2
     eof
     return x
@@ -295,10 +299,11 @@ ppNewLine = PPToken PP_NewLine <$> do
 
 ppTokenizer2 :: Stream s m Char => ParsecT s u m PPToken
 ppTokenizer2 = do
-    skipMany (oneOf "\t\v ")
+    skipMany notEndlineWhiteSpace
     x <- try header_name <|> try identifier <|> try pp_number <|>
          try character_literal <|> try string_literal <|> try pp_comment <|>
          try preprocessing_op_or_punc <|> try ppNonWhite <|> try ppNewLine 
+    skipMany notEndlineWhiteSpace
     case x of
         PPToken PP_Comment "/*" -> do
             manyTill anyChar (try (string "*/"))

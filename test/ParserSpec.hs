@@ -131,6 +131,18 @@ spec = do
             case ppTokenize "#\n" of
                 Right x -> x == [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
                 Left _ -> False
+        it "should parse text with whitespace at the end" $
+            case ppTokenize "# \n" of
+                Right x -> x == [PPToken Preprocessing_op_or_punc "#", PPToken PP_NewLine "\n"]
+                Left _ -> False
+        it "should parse empty text" $
+            case ppTokenize "" of
+                Right x -> x == []
+                Left _ -> False
+        it "should parse whitespace" $
+            case ppTokenize " " of
+                Right x -> x == []
+                Left _ -> False
 
     -- describe "ifGroup" $ do
     --     it "should match '#ifndef ABC'" $
