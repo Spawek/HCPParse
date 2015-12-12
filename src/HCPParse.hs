@@ -300,7 +300,6 @@ ppNewLine = PPToken PP_NewLine <$> do
 
 ppTokenizer2 :: Stream s m Char => ParsecT s u m PPToken
 ppTokenizer2 = do
-    skipMany notEndlineWhiteSpace
     x <- try header_name <|> try identifier <|> try pp_number <|>
          try character_literal <|> try string_literal <|> try pp_comment <|>
          try preprocessing_op_or_punc <|> try ppNonWhite <|> try ppNewLine 
