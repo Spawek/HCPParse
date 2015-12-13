@@ -62,6 +62,9 @@ satisfyT p = tokenPrim showTok nextPos testTok
       testTok t     = if p t then Just t else Nothing
       nextPos p t s = p  -- NOTE: position is not really passed
 
+noneOfTokenType :: (Stream s m PPToken) => [PPTokenType] -> ParsecT s u m PPToken
+noneOfTokenType typeList = satisfyT (\x -> (not (elem (tokenType x) typeList))) <?> "token with type different than: " ++ show typeList
+
 matchTokenType :: (Stream s m PPToken) => PPTokenType -> ParsecT s u m PPToken
 matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType)) <?> (show expectedType)
 
@@ -346,7 +349,7 @@ data PPGroupPartType =
     deriving (Eq, Show)
 
 ppGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
-ppGroup = try (ifSection) -- temporary only this
+ppGroup = try (ifSection) <|> try (controlSection) -- temporary only this
 
 ifSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
 ifSection = do
@@ -371,3 +374,23 @@ ifGroup = do
     subGroups <- many ppGroup
     return $ PPGroupPart (If_group subGroups) [x, y, identifier]
 
+controlSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
+controlSection = try (includeLine) <|> try (defineLine)
+
+includeLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+includeLine = do
+    x <- matchToken Preprocessing_op_or_punc "#"
+    y <- matchToken Identifier "include"
+    z <- many $ noneOfTokenType [PP_NewLine] -- NOTE: maybe it should be Header_name indesad of anyT, but it is done this way in C++ standard
+    matchTokenType PP_NewLine
+    return $ PPGroupPart Control_line ([x, y] ++ z)
+
+defineLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+defineLine = do
+    x <- matchToken Preprocessing_op_or_punc "#"
+    y <- matchToken Identifier "define"
+    identifier <- matchTokenType Identifier
+    replacement_list <- many $ noneOfTokenType [PP_NewLine]
+    matchTokenType PP_NewLine
+    return $ PPGroupPart Control_line ([x, y, identifier] ++ replacement_list)
+ 

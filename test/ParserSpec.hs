@@ -157,8 +157,11 @@ spec = do
         it "should parse '#ifndef ABC\\n#ifndef XXX\\n#endif\\n#endif\\n'" $
             shouldCounsumeWholeInput ifSection (quickParse "#ifndef ABC\n#ifndef XXX\n#endif\n#endif\n")
 
+    describe "controlSection" $ do
+        it "should parse '#include <iostream>\\n'" $
+            shouldCounsumeWholeInput controlSection (quickParse "#include <iostream>\n")
+        it "should parse '#define abc xxx\\n'" $
+            shouldCounsumeWholeInput controlSection (quickParse "#define abc xxx\n")
 
 main :: IO ()
 main = hspec spec
-
-
