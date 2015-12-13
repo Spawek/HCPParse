@@ -8,6 +8,12 @@ import Test.Hspec
 import Text.Parsec
 import Data.Functor.Identity
 
+shouldCounsumeWholeInput :: (Eq a, Stream s Identity t, Show t) => Parsec s () a -> s -> Bool
+shouldCounsumeWholeInput parser input = 
+    case (parse (parser >> eof) "err" input) of
+        Right _ -> True
+        Left _ -> False
+    
 shouldParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> a -> Bool
 shouldParse parser input expectedOutput =
     case (parse parser "err" input) of
@@ -22,10 +28,11 @@ shouldNotParse parser input =
         Left _ -> True
         Right _ -> False
 
-quickParse :: [Char] -> [PPToken]
-quickParse x = case ppTokenize x of
-    Right result -> result
-    Left err -> error $ "wrong quickParse for: '" ++ x ++ "'"
+quickParse :: String -> [PPToken]
+quickParse x =
+    case ppTokenize x of
+        Right result -> result
+        Left err -> error $ "wrong quickParse for: '" ++ x ++ "'"
 
 ppTokenizeShouldParse :: String -> [PPToken] -> Bool
 ppTokenizeShouldParse input expectedOutput =
@@ -139,10 +146,17 @@ spec = do
         it "should parse whitespace" $
             ppTokenizeShouldParse " " []
 
-    -- describe "ifGroup" $ do
-    --     it "should match '#ifndef ABC'" $
-    --         shouldParse ifGroup $ quickParse "#ifndef ABC" $ 
-    --             []
+    describe "ifGroup" $ do
+        it "should parse '#ifndef ABC\\n'" $
+            shouldParse ifGroup (quickParse "#ifndef ABC\n")
+                (PPGroupPart If_group [(PPToken Preprocessing_op_or_punc "#"), (PPToken Identifier "ifndef"), (PPToken Identifier "ABC")] [])
+
+    describe "ifSection" $ do
+        it "should parse '#ifndef ABC\\n #endif\\n'" $
+            shouldCounsumeWholeInput ifSection (quickParse "#ifndef ABC\n #endif\n")
+        it "should parse '#ifndef ABC\\n#ifndef XXX\\n#endif\\n#endif\\n'" $
+            shouldCounsumeWholeInput ifSection (quickParse "#ifndef ABC\n#ifndef XXX\n#endif\n#endif\n")
+
 
 main :: IO ()
 main = hspec spec

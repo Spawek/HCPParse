@@ -63,11 +63,11 @@ satisfyT p = tokenPrim showTok nextPos testTok
       nextPos p t s = p  -- NOTE: position is not really passed
 
 matchTokenType :: (Stream s m PPToken) => PPTokenType -> ParsecT s u m PPToken
-matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType))
+matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType)) <?> (show expectedType)
 
 -- TODO: can be optimized for speed (don't create new token)
 matchToken :: (Stream s m PPToken) => PPTokenType -> String -> ParsecT s u m PPToken
-matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText))  
+matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText)) <?> (show expectedType ++ " : " ++ show expectedText)
 
 cppNondigit :: Stream s m Char => ParsecT s u m Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
@@ -333,44 +333,42 @@ type PPFile = [PPGroupPart]
 
 data PPGroupPart = PPGroupPart{
     groupType :: PPGroupPartType,
-    groupTokens :: [PPToken]
+    groupTokens :: [PPToken],
+    subGroups :: [PPGroupPart] -- TODO: shouln't it be a part of If_group?
 }  deriving (Eq, Show)
 
 data PPGroupPartType =
-    If_section |
+    If_section {if_group :: PPGroupPart, endif_line :: PPGroupPart}|
     Control_line |
     Text_line |
-    Non_directive
+    Non_directive |
+    If_group | -- NOTE: maybe it shouldn't be here
+    Endif_line  -- NOTE: maybe it shouldn't be here
     deriving (Eq, Show)
 
+ppGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
+ppGroup = try (ifSection) -- temporary only this
+
+ifSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
+ifSection = do
+    x <- ifGroup
+    y <- endifLine
+    return $ PPGroupPart (If_section x y) [] []
+
+endifLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+endifLine = do
+    x <- matchToken Preprocessing_op_or_punc "#"
+    y <- matchToken Identifier "endif"
+    matchTokenType PP_NewLine
+    return $ PPGroupPart Endif_line [x, y] []
+
 -- NOTE: only #ifndef supported for now
-ifGroup :: Stream s m PPToken => ParsecT s u m [PPToken]
+ifGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
 ifGroup = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "ifndef"
     identifier <- matchTokenType Identifier
     matchTokenType PP_NewLine
-    return $ [x, y, identifier]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    subGroups <- many ppGroup
+    return $ PPGroupPart If_group [x, y, identifier] subGroups
 
