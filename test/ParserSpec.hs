@@ -149,7 +149,7 @@ spec = do
     describe "ifGroup" $ do
         it "should parse '#ifndef ABC\\n'" $
             shouldParse ifGroup (quickParse "#ifndef ABC\n")
-                (PPGroupPart If_group [(PPToken Preprocessing_op_or_punc "#"), (PPToken Identifier "ifndef"), (PPToken Identifier "ABC")] [])
+                (PPGroupPart (If_group []) [(PPToken Preprocessing_op_or_punc "#"), (PPToken Identifier "ifndef"), (PPToken Identifier "ABC")])
 
     describe "ifSection" $ do
         it "should parse '#ifndef ABC\\n #endif\\n'" $

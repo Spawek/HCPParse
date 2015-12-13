@@ -333,8 +333,7 @@ type PPFile = [PPGroupPart]
 
 data PPGroupPart = PPGroupPart{
     groupType :: PPGroupPartType,
-    groupTokens :: [PPToken],
-    subGroups :: [PPGroupPart] -- TODO: shouln't it be a part of If_group?
+    groupTokens :: [PPToken]
 }  deriving (Eq, Show)
 
 data PPGroupPartType =
@@ -342,8 +341,8 @@ data PPGroupPartType =
     Control_line |
     Text_line |
     Non_directive |
-    If_group | -- NOTE: maybe it shouldn't be here
-    Endif_line  -- NOTE: maybe it shouldn't be here
+    If_group {subGroups :: [PPGroupPart]} |
+    Endif_line
     deriving (Eq, Show)
 
 ppGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
@@ -353,14 +352,14 @@ ifSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
 ifSection = do
     x <- ifGroup
     y <- endifLine
-    return $ PPGroupPart (If_section x y) [] []
+    return $ PPGroupPart (If_section x y) []
 
 endifLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
 endifLine = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "endif"
     matchTokenType PP_NewLine
-    return $ PPGroupPart Endif_line [x, y] []
+    return $ PPGroupPart Endif_line [x, y]
 
 -- NOTE: only #ifndef supported for now
 ifGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
@@ -370,5 +369,5 @@ ifGroup = do
     identifier <- matchTokenType Identifier
     matchTokenType PP_NewLine
     subGroups <- many ppGroup
-    return $ PPGroupPart If_group [x, y, identifier] subGroups
+    return $ PPGroupPart (If_group subGroups) [x, y, identifier]
 
