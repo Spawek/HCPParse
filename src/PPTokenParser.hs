@@ -3,8 +3,7 @@
 module PPTokenParser where 
 
 import Text.Parsec
-import HCPParse
-
+import Tokenizer
 
 type PPFile = [PPGroupPart]
 

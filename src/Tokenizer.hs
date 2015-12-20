@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module HCPParse where 
+module Tokenizer where 
 
 import Control.Applicative hiding ((<|>), many)
 import System.Environment

@@ -1,20 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module ParserSpec where
+module TokenizerSpec where
 
 import System.Exit (exitFailure , exitSuccess)
-import HCPParse
-import PPTokenParser
 import Test.Hspec
 import Text.Parsec
+import Tokenizer
 import Data.Functor.Identity
-
-shouldCounsumeWholeInput :: (Eq a, Stream s Identity t, Show t) => Parsec s () a -> s -> Bool
-shouldCounsumeWholeInput parser input = 
-    case (parse (parser >> eof) "err" input) of
-        Right _ -> True
-        Left _ -> False
-    
+ 
 shouldParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> a -> Bool
 shouldParse parser input expectedOutput =
     case (parse parser "err" input) of
@@ -28,12 +21,6 @@ shouldNotParse parser input =
     case (parse parser "err" input) of
         Left _ -> True
         Right _ -> False
-
-quickParse :: String -> [PPToken]
-quickParse x =
-    case ppTokenize x of
-        Right result -> result
-        Left err -> error $ "wrong quickParse for: '" ++ x ++ "'"
 
 ppTokenizeShouldParse :: String -> [PPToken] -> Bool
 ppTokenizeShouldParse input expectedOutput =
@@ -115,24 +102,6 @@ spec = do
         it "should parse '  \\n\\n\\n  x  \\n\\n\\n     '" $
             shouldParse joinWhitespaces "  \n\n\n  x  \n\n\n     " "\nx\n"
 
-    describe "matchTokenType" $ do
-        it "should match same token type" $
-            shouldParse (matchTokenType Identifier) [PPToken Identifier "abc"]
-                (PPToken Identifier "abc")
-        it "shouldn't parse different token type" $
-            shouldNotParse (matchTokenType Identifier) [PPToken Header_name "abc"] 
-        it "shouldn't parse different empty list" $
-            shouldNotParse (matchTokenType Identifier) []
-
-    describe "matchToken" $ do
-        it "should match same token" $
-            shouldParse (matchToken Identifier "abc") [PPToken Identifier "abc"]
-                (PPToken Identifier "abc")
-        it "shouldn't match different type" $
-            shouldNotParse (matchToken Identifier "abc") [PPToken Header_name "abc"]
-        it "shouldn't match different text" $
-            shouldNotParse (matchToken Identifier "abc") [PPToken Identifier "xxx"]
-
     describe "ppTokenize" $ do
         it "should parse single line file" $
             ppTokenizeShouldParse "#" [PPToken Preprocessing_op_or_punc "#"]
@@ -146,23 +115,6 @@ spec = do
             ppTokenizeShouldParse "" []
         it "should parse whitespace" $
             ppTokenizeShouldParse " " []
-
-    describe "ifGroup" $ do
-        it "should parse '#ifndef ABC\\n'" $
-            shouldParse ifGroup (quickParse "#ifndef ABC\n")
-                (PPGroupPart (If_group []) [(PPToken Preprocessing_op_or_punc "#"), (PPToken Identifier "ifndef"), (PPToken Identifier "ABC")])
-
-    describe "ifSection" $ do
-        it "should parse '#ifndef ABC\\n #endif\\n'" $
-            shouldCounsumeWholeInput ifSection (quickParse "#ifndef ABC\n #endif\n")
-        it "should parse '#ifndef ABC\\n#ifndef XXX\\n#endif\\n#endif\\n'" $
-            shouldCounsumeWholeInput ifSection (quickParse "#ifndef ABC\n#ifndef XXX\n#endif\n#endif\n")
-
-    describe "controlSection" $ do
-        it "should parse '#include <iostream>\\n'" $
-            shouldCounsumeWholeInput controlSection (quickParse "#include <iostream>\n")
-        it "should parse '#define abc xxx\\n'" $
-            shouldCounsumeWholeInput controlSection (quickParse "#define abc xxx\n")
 
 main :: IO ()
 main = hspec spec

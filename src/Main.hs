@@ -1,4 +1,4 @@
-import HCPParse
+import Tokenizer
 import PPTokenParser
 import Text.ParserCombinators.Parsec
 import Lib.Util (concatWith)
