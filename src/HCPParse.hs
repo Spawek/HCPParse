@@ -46,31 +46,52 @@ instance Show PPToken where
     show (PPToken tokenType text) = "(" ++ show tokenType ++ " : " ++ show text ++ ")"
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
-oneOfT :: (Eq t, Show t, Stream s m t) => [t] -> ParsecT s u m t
+
+-- oneOfT :: (Eq t, Show t, Stream [PPToken] m t) => [t] -> ParsecT s u m t
+-- oneOfT ts = satisfyT (`elem` ts)
+
+-- noneOfT :: (Eq t, Show t, Stream [PPToken] m t) => [t] -> ParsecT s u m t
+-- noneOfT ts = satisfyT (not . (`elem` ts))
+
+-- anyT :: (Show t, Stream s m t) => ParsecT s u m t
+-- anyT = satisfyT (const True)
+
+-- satisfyT :: (Show t, Stream s m t) => (t -> Bool) -> ParsecT s u m t
+-- satisfyT p = tokenPrim showTok nextPos testTok
+--     where
+--       showTok t     = show t
+--       testTok t     = if p t then Just t else Nothing
+
+-- NOTE: not sure if s (stream) had to be changed to [PPToken], but didn't see any way to use it in Pos update in the other way
+oneOfT :: (Stream [PPToken] m PPToken) => [PPToken] -> ParsecT [PPToken] u m PPToken
 oneOfT ts = satisfyT (`elem` ts)
 
-noneOfT :: (Eq t, Show t, Stream s m t) => [t] -> ParsecT s u m t
+noneOfT :: (Stream [PPToken] m PPToken) => [PPToken] -> ParsecT [PPToken] u m PPToken
 noneOfT ts = satisfyT (not . (`elem` ts))
 
-anyT :: (Show t, Stream s m t) => ParsecT s u m t
+anyT :: (Stream [PPToken] m PPToken) => ParsecT [PPToken] u m PPToken
 anyT = satisfyT (const True)
 
-satisfyT :: (Show t, Stream s m t) => (t -> Bool) -> ParsecT s u m t
+satisfyT :: (Stream [PPToken] m PPToken) => (PPToken -> Bool) -> ParsecT [PPToken] u m PPToken
 satisfyT p = tokenPrim showTok nextPos testTok
     where
-      showTok t     = show t
-      testTok t     = if p t then Just t else Nothing
-      nextPos p t s = p  -- NOTE: position is not really passed
+        showTok t       = show t
+        testTok t       = if p t then Just t else Nothing
+        nextPos pos (PPToken tokenType _) s = case tokenType of
+            PP_NewLine -> setSourceColumn (setSourceLine pos ((sourceLine pos) + 1)) 0
+            _ -> setSourceColumn pos ((sourceColumn pos) + 1)
 
-noneOfTokenType :: (Stream s m PPToken) => [PPTokenType] -> ParsecT s u m PPToken
-noneOfTokenType typeList = satisfyT (\x -> (not (elem (tokenType x) typeList))) <?> "token with type different than: " ++ show typeList
+-- nextPos :: (Stream [PPToken] m PPToken) => SourcePos -> PPToken -> [PPToken] -> SourcePos
 
-matchTokenType :: (Stream s m PPToken) => PPTokenType -> ParsecT s u m PPToken
+noneOfTokenTypes :: (Stream [PPToken] m PPToken) => [PPTokenType] -> ParsecT [PPToken] u m PPToken
+noneOfTokenTypes typeList = satisfyT (\x -> (not (elem (tokenType x) typeList))) <?> "(token with type different than: " ++ show typeList ++ ")"
+
+matchTokenType :: (Stream [PPToken] m PPToken) => PPTokenType -> ParsecT [PPToken] u m PPToken
 matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType)) <?> (show expectedType)
 
 -- TODO: can be optimized for speed (don't create new token)
-matchToken :: (Stream s m PPToken) => PPTokenType -> String -> ParsecT s u m PPToken
-matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText)) <?> (show expectedType ++ " : " ++ show expectedText)
+matchToken :: (Stream [PPToken] m PPToken) => PPTokenType -> String -> ParsecT [PPToken] u m PPToken
+matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText)) <?> "(" ++ (show expectedType ++ " : " ++ show expectedText) ++ ")"
 
 cppNondigit :: Stream s m Char => ParsecT s u m Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
@@ -348,16 +369,22 @@ data PPGroupPartType =
     Endif_line
     deriving (Eq, Show)
 
-ppGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
-ppGroup = try (ifSection) <|> try (controlSection) -- temporary only this
+ppGroups :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m [PPGroupPart]
+ppGroups = do
+    x <- many ppGroup
+    eof
+    return x
 
-ifSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
+ppGroup :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+ppGroup = try (ifSection) <|> try (controlSection) <|> try (textLine)
+
+ifSection :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 ifSection = do
     x <- ifGroup
     y <- endifLine
     return $ PPGroupPart (If_section x y) []
 
-endifLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+endifLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 endifLine = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "endif"
@@ -365,7 +392,7 @@ endifLine = do
     return $ PPGroupPart Endif_line [x, y]
 
 -- NOTE: only #ifndef supported for now
-ifGroup :: Stream s m PPToken => ParsecT s u m PPGroupPart
+ifGroup :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 ifGroup = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "ifndef"
@@ -374,23 +401,29 @@ ifGroup = do
     subGroups <- many ppGroup
     return $ PPGroupPart (If_group subGroups) [x, y, identifier]
 
-controlSection :: Stream s m PPToken => ParsecT s u m PPGroupPart
+controlSection :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 controlSection = try (includeLine) <|> try (defineLine)
 
-includeLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+includeLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 includeLine = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "include"
-    z <- many $ noneOfTokenType [PP_NewLine] -- NOTE: maybe it should be Header_name indesad of anyT, but it is done this way in C++ standard
+    z <- many $ noneOfTokenTypes [PP_NewLine] -- NOTE: maybe it should be Header_name instead of anyT, but it is done this way in C++ standard
     matchTokenType PP_NewLine
     return $ PPGroupPart Control_line ([x, y] ++ z)
 
-defineLine :: Stream s m PPToken => ParsecT s u m PPGroupPart
+defineLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 defineLine = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "define"
     identifier <- matchTokenType Identifier
-    replacement_list <- many $ noneOfTokenType [PP_NewLine]
+    replacement_list <- many $ noneOfTokenTypes [PP_NewLine]
     matchTokenType PP_NewLine
     return $ PPGroupPart Control_line ([x, y, identifier] ++ replacement_list)
- 
+
+textLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+textLine = do
+    nonHash <- satisfyT (\(PPToken t val) -> t /= PP_NewLine && ( not (val == "#" && t == Preprocessing_op_or_punc))) <?> "textLine start"
+    x <- many $ noneOfTokenTypes [PP_NewLine]
+    matchTokenType PP_NewLine
+    return $ PPGroupPart Text_line (nonHash:x)
