@@ -21,7 +21,8 @@ executable HCPParse
 Library 
     hs-source-dirs:     src
     default-language:   Haskell2010
-    exposed-Modules:    HCPParse
+    exposed-Modules:    HCPParse,
+                        PPTokenParser
     -- exposed-Modules:    HCPParse.Parser
     -- GHC-Options:       -Wall
     build-depends:      base >=4.6 && <4.7,

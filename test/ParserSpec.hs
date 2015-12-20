@@ -4,6 +4,7 @@ module ParserSpec where
 
 import System.Exit (exitFailure , exitSuccess)
 import HCPParse
+import PPTokenParser
 import Test.Hspec
 import Text.Parsec
 import Data.Functor.Identity
