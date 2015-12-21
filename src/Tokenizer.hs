@@ -147,7 +147,6 @@ c_char_char = do
     x <- noneOf ("'\\\n")
     return [x]
 
-
 -- TODO change all the code to look like this one?
 -- string_literal :: Stream s m Char => ParsecT s u m PPToken
 -- string_literal = (PPToken String_literal) <$>

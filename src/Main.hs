@@ -18,3 +18,9 @@ main = do
             putStr "\nREPRINT BEGIN\n"
             putStr $ concatWith " " $ restringifyTokens tokens
             putStr "\nREPRINT END\n"
+            case parsePPFile tokens of
+                Left err -> print $ "preproc parser error: " ++ show err
+                Right parsedTokens -> do
+                    putStr "\nPARSED TOKENS BEGIN\n"
+                    print $ parsedTokens
+                    putStr "\nPARSED TOKENS END\n"

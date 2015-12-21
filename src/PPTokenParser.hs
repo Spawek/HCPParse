@@ -4,13 +4,14 @@ module PPTokenParser where
 
 import Text.Parsec
 import Tokenizer
+import Control.Applicative hiding ((<|>), many)
 
-type PPFile = [PPGroupPart]
+data PPFile = PPFile [PPGroupPart] deriving (Eq)
 
 data PPGroupPart = PPGroupPart{
     groupType :: PPGroupPartType,
     groupTokens :: [PPToken]
-}  deriving (Eq, Show)
+}  deriving (Eq)
 
 data PPGroupPartType =
     If_section {if_group :: PPGroupPart, endif_line :: PPGroupPart}|
@@ -21,7 +22,15 @@ data PPGroupPartType =
     Endif_line
     deriving (Eq, Show)
 
--- ppDirective should be on the beggining of the line
+showPPGroupPartsList :: [PPGroupPart] -> String
+showPPGroupPartsList [] = ""
+showPPGroupPartsList (x:xs) = show x ++ "\n" ++ showPPGroupPartsList xs
+
+instance Show PPFile where
+    show (PPFile x) = showPPGroupPartsList x
+
+instance Show PPGroupPart where
+    show (PPGroupPart groupType groupTokens) = "(" ++ show groupType ++ " : " ++ show groupTokens ++ ")"
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
 -- NOTE: not sure if s (stream) had to be changed to [PPToken], but didn't see any way to use it in Pos update in the other way
@@ -92,9 +101,9 @@ includeLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 includeLine = do
     x <- matchToken Preprocessing_op_or_punc "#"
     y <- matchToken Identifier "include"
-    z <- many $ noneOfTokenTypes [PP_NewLine] -- NOTE: maybe it should be Header_name instead of anyT, but it is done this way in C++ standard
+    z <- matchTokenType Header_name -- NOTE: C++ standard allows using macros for generating header names - it is not supported here
     matchTokenType PP_NewLine
-    return $ PPGroupPart Control_line ([x, y] ++ z)
+    return $ PPGroupPart Control_line [x, y, z]
 
 defineLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 defineLine = do
@@ -105,9 +114,23 @@ defineLine = do
     matchTokenType PP_NewLine
     return $ PPGroupPart Control_line ([x, y, identifier] ++ replacement_list)
 
-textLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
-textLine = do
-    nonHash <- satisfyT (\(PPToken t val) -> t /= PP_NewLine && ( not (val == "#" && t == Preprocessing_op_or_punc))) <?> "textLine start"
+emptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+emptyTextLine = do
+    x <- matchTokenType PP_NewLine
+    return $ PPGroupPart Text_line [x]
+
+nonEmptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+nonEmptyTextLine = do
+    nonHash <- satisfyT (\(PPToken t val) -> t /= PP_NewLine && ( not (val == "#" && t == Preprocessing_op_or_punc))) <?> "nonEmptyTextLine start"
     x <- many $ noneOfTokenTypes [PP_NewLine]
     matchTokenType PP_NewLine
     return $ PPGroupPart Text_line (nonHash:x)
+
+textLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+textLine = try (emptyTextLine) <|>  try (nonEmptyTextLine)
+
+ppFileParser :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPFile
+ppFileParser = PPFile <$> ppGroups
+
+parsePPFile :: [PPToken] -> Either ParseError PPFile
+parsePPFile = parse ppFileParser "preproc parse error"

@@ -58,5 +58,11 @@ spec = do
         it "should parse '#define abc xxx\\n'" $
             shouldCounsumeWholeInput controlSection (quickParse "#define abc xxx\n")
 
+    describe "parsePPFile" $ do
+    	it "should parse empty line" $
+    		case parsePPFile (quickParse "\n") of
+    			Left _ -> False
+    			Right _ -> True
+
 main :: IO ()
 main = hspec spec
