@@ -4,25 +4,10 @@ module PPTokenParserSpec where
 
 import Tokenizer
 import PPTokenParser
+import ParserTestBase
 import Test.Hspec
 import Text.Parsec
 import Data.Functor.Identity
-
------------------------- COPIED HERE - DRY VIOLATION !!!! - FIX IT
-shouldParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> a -> Bool
-shouldParse parser input expectedOutput =
-    case (parse parser "err" input) of
-        Left _ -> False
-        Right output ->
-            if output == expectedOutput then True
-            else False
-
-shouldNotParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> Bool
-shouldNotParse parser input =
-    case (parse parser "err" input) of
-        Left _ -> True
-        Right _ -> False
--------------------------------------------------------------
 
 shouldCounsumeWholeInput :: (Eq a, Stream s Identity t, Show t) => Parsec s () a -> s -> Bool
 shouldCounsumeWholeInput parser input = 

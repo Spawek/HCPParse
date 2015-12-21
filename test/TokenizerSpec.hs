@@ -1,27 +1,11 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 module TokenizerSpec where
 
-import System.Exit (exitFailure , exitSuccess)
+import Tokenizer
+import ParserTestBase
 import Test.Hspec
 import Text.Parsec
-import Tokenizer
-import Data.Functor.Identity
+import System.Exit (exitFailure , exitSuccess)
  
-shouldParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> a -> Bool
-shouldParse parser input expectedOutput =
-    case (parse parser "err" input) of
-        Left _ -> False
-        Right output ->
-            if output == expectedOutput then True
-            else False
-
-shouldNotParse :: (Eq a, Stream s Identity t) => Parsec s () a -> s -> Bool
-shouldNotParse parser input =
-    case (parse parser "err" input) of
-        Left _ -> True
-        Right _ -> False
-
 ppTokenizeShouldParse :: String -> [PPToken] -> Bool
 ppTokenizeShouldParse input expectedOutput =
     case ppTokenize input of
