@@ -34,15 +34,28 @@ data PPTokenType =
     PP_NewLine |
     PP_AnythingElse |
     PP_Comment
-    deriving (Show, Eq)
+    deriving (Eq)
 
 data PPToken = PPToken {
     tokenType :: PPTokenType,
     text :: String
 } deriving (Eq)
 
+instance Show PPTokenType where
+    show Header_name = "header"
+    show Identifier = "id"
+    show Pp_number = "num"
+    show Character_literal = "char_literal"
+    show User_defined_character_literal = "user_char_literal"
+    show String_literal = "str_literal"
+    show User_defined_string_literal = "user_str_literal"
+    show Preprocessing_op_or_punc = "punc"
+    show PP_NewLine = "new_line"
+    show PP_AnythingElse = "else"
+    show PP_Comment = "comment" 
+
 instance Show PPToken where
-    show (PPToken tokenType text) = "(" ++ show tokenType ++ " : " ++ show text ++ ")"
+    show (PPToken tokenType text) = "(" ++ show text ++ " : " ++ show tokenType ++ ")"
 
 cppNondigit :: Stream s m Char => ParsecT s u m Char
 cppNondigit = oneOf "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"

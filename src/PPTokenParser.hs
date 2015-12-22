@@ -14,23 +14,31 @@ data PPGroupPart = PPGroupPart{
 }  deriving (Eq)
 
 data PPGroupPartType =
-    If_section {if_group :: PPGroupPart, endif_line :: PPGroupPart}|
+    If_section {if_group :: PPGroupPart, endif_line :: PPGroupPart} |
     Control_line |
     Text_line |
     Non_directive |
     If_group {subGroups :: [PPGroupPart]} |
     Endif_line
-    deriving (Eq, Show)
+    deriving (Eq)
 
 showPPGroupPartsList :: [PPGroupPart] -> String
 showPPGroupPartsList [] = ""
-showPPGroupPartsList (x:xs) = show x ++ "\n" ++ showPPGroupPartsList xs
+showPPGroupPartsList (x:xs) = show x ++ "\n\n" ++ showPPGroupPartsList xs
 
 instance Show PPFile where
     show (PPFile x) = showPPGroupPartsList x
 
 instance Show PPGroupPart where
-    show (PPGroupPart groupType groupTokens) = "(" ++ show groupType ++ " : " ++ show groupTokens ++ ")"
+    show (PPGroupPart groupType groupTokens) = "(" ++ show groupTokens ++ " : " ++ show groupType ++ ")"
+
+instance Show PPGroupPartType where
+    show (If_section if_group endif_line) = "If_section : \n" ++ show if_group ++ "\n" ++ show endif_line
+    show Control_line = "Control_line"
+    show Text_line = "Text"
+    show Non_directive = "Non_directive"
+    show (If_group subGroups) = "If_group :\n" ++ show subGroups
+    show Endif_line = "Endif"
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
 -- NOTE: not sure if s (stream) had to be changed to [PPToken], but didn't see any way to use it in Pos update in the other way
