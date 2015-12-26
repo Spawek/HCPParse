@@ -14,13 +14,24 @@ data PPGroupPart = PPGroupPart{
 }  deriving (Eq)
 
 data PPGroupPartType =
-    If_section {if_group :: PPGroupPart, endif_line :: PPGroupPart} |
-    Control_line |
+    If_section {if_group :: PPGroupPart} |
+    Control_line {control_lineType :: ControlLineType} |
     Text_line |
     Non_directive |
-    If_group {subGroups :: [PPGroupPart]} |
+    If_group {if_groupType :: IfGroupType, subGroups :: [PPGroupPart]} |
     Endif_line
     deriving (Eq)
+
+data IfGroupType =
+    Ifndef |
+    Ifdef |
+    If
+    deriving (Show, Eq)
+
+data ControlLineType =
+    Include |
+    Define
+    deriving (Show, Eq)
 
 showPPGroupPartsList :: [PPGroupPart] -> String
 showPPGroupPartsList [] = ""
@@ -30,14 +41,14 @@ instance Show PPFile where
     show (PPFile x) = showPPGroupPartsList x
 
 instance Show PPGroupPart where
-    show (PPGroupPart groupType groupTokens) = "(" ++ show groupTokens ++ " : " ++ show groupType ++ ")"
+    show (PPGroupPart groupType groupTokens) = "(" ++ show groupType ++ " : " ++ show groupTokens ++ ")\n"
 
 instance Show PPGroupPartType where
-    show (If_section if_group endif_line) = "If_section : \n" ++ show if_group ++ "\n" ++ show endif_line
-    show Control_line = "Control_line"
+    show (If_section if_group) = show if_group ++ "\n"
+    show (Control_line control_lineType) = show control_lineType
     show Text_line = "Text"
     show Non_directive = "Non_directive"
-    show (If_group subGroups) = "If_group :\n" ++ show subGroups
+    show (If_group t subGroups) = "\n" ++ show t ++ " :\n" ++ show subGroups
     show Endif_line = "Endif"
 
 -- http://stackoverflow.com/questions/2473615/parsec-3-1-0-with-custom-token-datatype
@@ -82,8 +93,8 @@ ppGroup = try (ifSection) <|> try (controlSection) <|> try (textLine)
 ifSection :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 ifSection = do
     x <- ifGroup
-    y <- endifLine
-    return $ PPGroupPart (If_section x y) []
+    endifLine
+    return $ PPGroupPart (If_section x) []
 
 endifLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 endifLine = do
@@ -92,15 +103,29 @@ endifLine = do
     matchTokenType PP_NewLine
     return $ PPGroupPart Endif_line [x, y]
 
--- NOTE: only #ifndef supported for now
+ifndef :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m IfGroupType
+ifndef = do
+    matchToken Identifier "ifndef"
+    return Ifndef 
+
+ifdef :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m IfGroupType
+ifdef = do
+    matchToken Identifier "ifdef"
+    return Ifdef 
+
+ifDirective :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m IfGroupType
+ifDirective = do
+    matchToken Identifier "if"
+    return If 
+
 ifGroup :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 ifGroup = do
-    x <- matchToken Preprocessing_op_or_punc "#"
-    y <- matchToken Identifier "ifndef"
-    identifier <- matchTokenType Identifier
+    matchToken Preprocessing_op_or_punc "#"
+    t <- try(ifndef) <|> try(ifdef) <|> try(ifDirective)
+    identifiers <- many1 (matchTokenType Identifier)
     matchTokenType PP_NewLine
     subGroups <- many ppGroup
-    return $ PPGroupPart (If_group subGroups) [x, y, identifier]
+    return $ PPGroupPart (If_group t subGroups) identifiers
 
 controlSection :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 controlSection = try (includeLine) <|> try (defineLine)
@@ -111,7 +136,7 @@ includeLine = do
     y <- matchToken Identifier "include"
     z <- matchTokenType Header_name -- NOTE: C++ standard allows using macros for generating header names - it is not supported here
     matchTokenType PP_NewLine
-    return $ PPGroupPart Control_line [x, y, z]
+    return $ PPGroupPart (Control_line Include) [z]
 
 defineLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 defineLine = do
@@ -120,7 +145,7 @@ defineLine = do
     identifier <- matchTokenType Identifier
     replacement_list <- many $ noneOfTokenTypes [PP_NewLine]
     matchTokenType PP_NewLine
-    return $ PPGroupPart Control_line ([x, y, identifier] ++ replacement_list)
+    return $ PPGroupPart (Control_line Define) ([identifier] ++ replacement_list)
 
 emptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 emptyTextLine = do
