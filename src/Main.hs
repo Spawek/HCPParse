@@ -22,8 +22,8 @@ data ParsingState = ParsingState{
 joinResults :: PreprocResult -> PreprocResult -> PPGroupPart -> PreprocResult
 joinResults err@(ParseErr _) _ _ = err
 joinResults _ err@(ParseErr _) _ = err
-joinResults (CompleteResult a _) (CompleteResult x y) newTokens = (CompleteResult (a ++ x ++ [newTokens]) y)
-joinResults (CompleteResult x _) (IncludeRequest a b c d) newTokens = (IncludeRequest (a ++ x ++ [newTokens]) b c d)
+joinResults (CompleteResult a _) (CompleteResult x y) newToken = (CompleteResult (newToken:(a ++ x)) y)
+joinResults (CompleteResult x _) (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:(a ++ x)) b c d)
 
 performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
