@@ -35,10 +35,10 @@ spec = do
     describe "header_name" $ do
         it "should parse '<iostream>'" $
             shouldParse header_name "<iostream>"
-                (PPToken Header_name "<iostream>")
+                (PPToken Header_name "iostream")
         it "should parse '\"foo.h\"'" $
             shouldParse header_name "\"foo.h\"" 
-                (PPToken Header_name "\"foo.h\"")
+                (PPToken Header_name "foo.h")
         it "shouldn't parse 'TestName'" $
             shouldNotParse header_name "TestName"
 

@@ -19,11 +19,10 @@ data ParsingState = ParsingState{
     definitions :: [(PPToken, [PPToken])]
 }  deriving (Eq, Show)
 
-joinResults :: PreprocResult -> PreprocResult -> PPGroupPart -> PreprocResult
-joinResults err@(ParseErr _) _ _ = err
-joinResults _ err@(ParseErr _) _ = err
-joinResults (CompleteResult a _) (CompleteResult x y) newToken = (CompleteResult (newToken:(a ++ x)) y)
-joinResults (CompleteResult x _) (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:(a ++ x)) b c d)
+appendToken :: PreprocResult -> PPGroupPart -> PreprocResult
+appendToken err@(ParseErr _) _ = err
+appendToken (CompleteResult x y) newToken = (CompleteResult (newToken:x) y)
+appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c d)
 
 performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
@@ -42,15 +41,27 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
                                     subResult = performPreproc lastResult subGroups
                                 in
                                     performPreproc subResult xs
-        text@(PPGroupPart Text_line groupTokens) ->
+        (PPGroupPart (Control_line Define) groupTokens) ->
             let
-                nextResult = performPreproc lastResult xs
+                newDefinition = (head groupTokens, tail groupTokens)
+                newParsingState = ParsingState (newDefinition:(definitions parsingState))
+                newResult = CompleteResult resultTokens newParsingState
             in
-                joinResults lastResult nextResult text
+                performPreproc newResult xs
+        (PPGroupPart (Control_line Include) groupTokens) ->
+            let
+                fileToInclude = case head groupTokens of
+                    PPToken Header_name text ->
+                        text
+            in
+                IncludeRequest resultTokens fileToInclude xs parsingState
+        text@(PPGroupPart Text_line groupTokens) ->
+            performPreproc (appendToken lastResult text) xs
+                
 
 
-parseFile :: PreprocResult -> String -> IO PreprocResult
-parseFile preprocResult fileName = do
+tokenizeFile :: String -> IO (Either String [PPGroupPart])
+tokenizeFile fileName = do
     rawText <- readFile fileName
     putStr "\nRAW TEXT BEGIN\n"
     putStr rawText
@@ -58,7 +69,7 @@ parseFile preprocResult fileName = do
     case ppTokenize rawText of
         Left err -> do
             print $ "tokenizer error: " ++ show err
-            return $ ParseErr $ show err
+            return $ (Left (show err))
         Right tokens -> do
             putStr "\nPP TOKENS BEGIN\n"
             putStr $ concatWith "\n" $ map show tokens
@@ -69,45 +80,54 @@ parseFile preprocResult fileName = do
             case parsePPFile tokens of
                 Left err -> do
                     print $ "preproc parser error: " ++ show err
-                    return $ ParseErr $ show err
-                Right (PPFile parsedTokens) -> do
+                    return $ Left (show err)
+                Right file@(PPFile parsedTokens) -> do
                     putStr "\nPARSED TOKENS BEGIN\n"
-                    print parsedTokens
+                    print file
                     putStr "\nPARSED TOKENS END\n"
-                    case performPreproc preprocResult parsedTokens of
-                        res@(ParseErr _) -> do
-                            print $ "SOME ERR BEGIN" 
-                            print res
-                            print $ "SOME ERR ENDED"
-                            return res
-                        res@(CompleteResult _ _) -> do
-                            print $ "SOME RESULT BEGIN" 
-                            print res
-                            print $ "SOME RESULT ENDED"
-                            return res
-                        res@(IncludeRequest alreadyParsed fileToInclude remainingTokens includedState) -> do 
-                            print $ "SOME INCLUDE BEGIN" 
-                            print res
-                            print $ "SOME INCLUDE ENDED"
-                            includeResult <- parseFile res fileToInclude -- NOTE: recursive call!
-                            return $ performPreproc includeResult remainingTokens -- NOTE: recursive call!
-                            -- case includeResult of
-                            --     (CompleteResult justParsed justState) -> do  
-                            --         remainingResult <- return $ performPreproc justState remainingTokens
-                            --         case remainingResult of
-                            --             res@(ParseErr _) -> do
-                            --                 return res
-                            --             (CompleteResult justJustParsed justJustState) -> do
-                            --                 return $ CompleteResult (alreadyParsed ++ justParsed ++ justJustParsed) justJustState
-                            --             (IncludeRequest newAlreadyParsed newFileToInclude newRemainingTokens justJustState) -> do
-                            --                 return $ IncludeRequest (alreadyParsed ++ newAlreadyParsed) newFileToInclude newRemainingTokens justJustState
-                            --     (IncludeRequest newAlreadyParsed newFileToInclude newRemainingTokens newState) -> do
-                            --         return $ IncludeRequest (alreadyParsed ++ newAlreadyParsed) newFileToInclude newRemainingTokens newState
-                            --     err@(ParseErr _) -> do
-                            --         return err
+                    return $ Right parsedTokens
+
+
+parseTokens :: PreprocResult -> [PPGroupPart] -> IO PreprocResult
+parseTokens preprocResult tokens = 
+    case performPreproc preprocResult tokens of
+        res@(ParseErr _) -> do
+            print $ "SOME ERR BEGIN"
+            print res
+            print $ "SOME ERR ENDED"
+            return res
+        res@(CompleteResult _ _) -> do
+            print $ "SOME RESULT BEGIN"
+            print res
+            print $ "SOME RESULT ENDED"
+            return res
+        res@(IncludeRequest alreadyParsed fileToInclude remainingTokens includedState) -> do
+            print $ "SOME INCLUDE BEGIN"
+            print res
+            print $ "SOME INCLUDE ENDED"
+            includeResult <- parseFile (CompleteResult alreadyParsed includedState) fileToInclude -- was 
+            print $ "INCLUDED DATA BEGIN"
+            print includeResult
+            print $ "INCLUDED DATA ENDED"
+            parseTokens includeResult remainingTokens
+
+parseFile :: PreprocResult -> String -> IO PreprocResult
+parseFile preprocResult fileName = do
+    parsedTokens <- tokenizeFile fileName
+    case parsedTokens of
+        Left err -> return $ ParseErr err
+        Right parsedTokens -> parseTokens preprocResult parsedTokens
 
 main :: IO()
 main = do
-    parsed <- parseFile (CompleteResult [] (ParsingState[] )) "testSmallIn.cpp"
-    print $ parsed
+    parsed <- parseFile (CompleteResult [] (ParsingState[] )) "testSmallIn2.cpp"
+    case parsed of
+        CompleteResult tokens _ -> do
+            print $ reverse tokens
+        ParseErr err -> do
+            print $ "PARSE ERROR: " ++ err
+        req@(IncludeRequest _ _ _ _) -> do
+            print $ "PARSER ERROR - INCLUDE RETURNED!!! BEGIN"
+            print req
+            print $ "PARSER ERROR - INCLUDE RETURNED!!! END"
     return ()
