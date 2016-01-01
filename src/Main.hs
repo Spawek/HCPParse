@@ -85,22 +85,15 @@ tokenizeFile fileName = do
 
 
 parseTokens :: PreprocResult -> [PPGroupPart] -> IO PreprocResult
-parseTokens preprocResult tokens = 
-    case performPreproc preprocResult tokens of
-        res@(ParseErr _) -> do
-            print $ "SOME ERR BEGIN"
-            print res
-            print $ "SOME ERR ENDED"
-            return res
-        res@(CompleteResult _ _) -> do
-            print $ "SOME RESULT BEGIN"
-            print res
-            print $ "SOME RESULT ENDED"
-            return res
+parseTokens preprocResult tokens = do
+    result <- return $ performPreproc preprocResult tokens
+    print $ "PREPROC DATA BEGIN"
+    print result
+    print $ "PREPROC DATA ENDED"
+    case result of
+        res@(ParseErr _) -> return res
+        res@(CompleteResult _ _) -> return res
         res@(IncludeRequest alreadyParsed fileToInclude remainingTokens includedState) -> do
-            print $ "SOME INCLUDE BEGIN"
-            print res
-            print $ "SOME INCLUDE ENDED"
             includeResult <- parseFile (CompleteResult alreadyParsed includedState) fileToInclude
             print $ "INCLUDED DATA BEGIN"
             print includeResult
@@ -114,6 +107,7 @@ parseFile preprocResult fileName = do
         Left err -> return $ ParseErr err
         Right parsedTokens -> parseTokens preprocResult parsedTokens
 
+getPostPreprocText :: [PPGroupPart] -> [Char]
 getPostPreprocText [] = ""
 getPostPreprocText (x:xs) = 
     case x of
