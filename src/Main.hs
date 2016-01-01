@@ -36,11 +36,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
                     case if_groupType of
                         Ifndef -> if elem (head groupTokens) $ map fst (definitions parsingState)
                             then performPreproc lastResult xs 
-                            else
-                                let
-                                    subResult = performPreproc lastResult subGroups
-                                in
-                                    performPreproc subResult xs
+                            else performPreproc lastResult (subGroups ++ xs)
         (PPGroupPart (Control_line Define) groupTokens) ->
             let
                 newDefinition = (head groupTokens, tail groupTokens)
@@ -105,7 +101,7 @@ parseTokens preprocResult tokens =
             print $ "SOME INCLUDE BEGIN"
             print res
             print $ "SOME INCLUDE ENDED"
-            includeResult <- parseFile (CompleteResult alreadyParsed includedState) fileToInclude -- was 
+            includeResult <- parseFile (CompleteResult alreadyParsed includedState) fileToInclude
             print $ "INCLUDED DATA BEGIN"
             print includeResult
             print $ "INCLUDED DATA ENDED"
@@ -118,12 +114,18 @@ parseFile preprocResult fileName = do
         Left err -> return $ ParseErr err
         Right parsedTokens -> parseTokens preprocResult parsedTokens
 
+getPostPreprocText [] = ""
+getPostPreprocText (x:xs) = 
+    case x of
+        (PPGroupPart Text_line tokens) ->
+            foldl (\x -> \y -> x ++ " " ++ y ) "" (map text tokens) ++ "\n" ++ getPostPreprocText xs
+
 main :: IO()
 main = do
     parsed <- parseFile (CompleteResult [] (ParsingState[] )) "testSmallIn2.cpp"
     case parsed of
         CompleteResult tokens _ -> do
-            print $ reverse tokens
+            putStr $ getPostPreprocText $ reverse tokens
         ParseErr err -> do
             print $ "PARSE ERROR: " ++ err
         req@(IncludeRequest _ _ _ _) -> do
