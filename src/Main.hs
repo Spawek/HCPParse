@@ -34,9 +34,16 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
             case if_group of
                 (PPGroupPart (If_group if_groupType subGroups) groupTokens) ->
                     case if_groupType of
-                        Ifndef -> if elem (head groupTokens) $ map fst (definitions parsingState)
-                            then performPreproc lastResult xs 
-                            else performPreproc lastResult (subGroups ++ xs)
+                        Ifndef -> takeIfGroupIfDefined (not isTokenDefined)
+                        Ifdef -> takeIfGroupIfDefined isTokenDefined
+                        where
+                            isTokenDefined = elem (head groupTokens) $ map fst (definitions parsingState)
+                            takeIfGroup = performPreproc lastResult (subGroups ++ xs)
+                            dontTakeIfGroup = performPreproc lastResult xs
+                            takeIfGroupIfDefined isDefined =
+                                if isDefined
+                                then takeIfGroup
+                                else dontTakeIfGroup
         (PPGroupPart (Control_line Define) groupTokens) ->
             let
                 newDefinition = (head groupTokens, tail groupTokens)
