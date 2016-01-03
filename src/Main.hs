@@ -1,3 +1,6 @@
+{-# LANGUAGE DatatypeContexts, RankNTypes, ConstraintKinds #-}
+-- TODO: don't know what DatatypeContexts and ConstraintKinds really is (and DatatypeContexts is reprecated)
+
 import Tokenizer
 import PPTokenParser
 import Text.ParserCombinators.Parsec
@@ -78,55 +81,55 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
         text@(PPGroupPart Text_line groupTokens) ->
             performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros parsingState groupTokens))) xs
 
-tokenizeFile :: String -> IO (Either String [PPGroupPart])
-tokenizeFile fileName = do
-    rawText <- readFile fileName
-    putStr "\nRAW TEXT BEGIN\n"
-    putStr rawText
-    putStr "\nRAW TEXT END\n"
+tokenizeFile :: World IO -> String -> IO (Either String [PPGroupPart]) --TODO: this file doesn't need IO at all - it can get a string on input
+tokenizeFile impl fileName = do
+    rawText <- worldReadFile impl fileName
+    worldPutStr impl "\nRAW TEXT BEGIN\n"
+    worldPutStr impl rawText
+    worldPutStr impl "\nRAW TEXT END\n"
     case ppTokenize rawText of
         Left err -> do
-            print $ "tokenizer error: " ++ show err
+            worldPutStr impl $ show ("tokenizer error: " ++ show err)
             return $ (Left (show err))
         Right tokens -> do
-            putStr "\nPP TOKENS BEGIN\n"
-            putStr $ concatWith "\n" $ map show tokens
-            putStr "\nPP TOKENS END\n"
-            putStr "\nREPRINT BEGIN\n"
-            putStr $ concatWith " " $ restringifyTokens tokens
-            putStr "\nREPRINT END\n"
+            worldPutStr impl "\nPP TOKENS BEGIN\n"
+            worldPutStr impl $ concatWith "\n" $ map show tokens
+            worldPutStr impl "\nPP TOKENS END\n"
+            worldPutStr impl "\nREPRINT BEGIN\n"
+            worldPutStr impl $ concatWith " " $ restringifyTokens tokens
+            worldPutStr impl "\nREPRINT END\n"
             case parsePPFile tokens of
                 Left err -> do
-                    print $ "preproc parser error: " ++ show err
+                    worldPutStr impl $ show ("preproc parser error: " ++ show err)
                     return $ Left (show err)
                 Right file@(PPFile parsedTokens) -> do
-                    putStr "\nPARSED TOKENS BEGIN\n"
-                    print file
-                    putStr "\nPARSED TOKENS END\n"
+                    worldPutStr impl "\nPARSED TOKENS BEGIN\n"
+                    worldPutStr impl $ show (file)
+                    worldPutStr impl "\nPARSED TOKENS END\n"
                     return $ Right parsedTokens
 
-parseTokens :: PreprocResult -> [PPGroupPart] -> IO PreprocResult
-parseTokens preprocResult tokens = do
+parseTokens :: World IO -> PreprocResult -> [PPGroupPart] -> IO PreprocResult
+parseTokens impl preprocResult tokens = do
     result <- return $ performPreproc preprocResult tokens
-    print $ "PREPROC DATA BEGIN"
-    print result
-    print $ "PREPROC DATA ENDED"
+    worldPutStr impl $ show ("PREPROC DATA BEGIN")
+    worldPutStr impl $ show (result)
+    worldPutStr impl $ show ("PREPROC DATA ENDED")
     case result of
         res@(ParseErr _) -> return res
         res@(CompleteResult _ _) -> return res
         res@(IncludeRequest alreadyParsed fileToInclude remainingTokens includedState) -> do
-            includeResult <- parseFile (CompleteResult alreadyParsed includedState) fileToInclude
-            print $ "INCLUDED DATA BEGIN"
-            print includeResult
-            print $ "INCLUDED DATA ENDED"
-            parseTokens includeResult remainingTokens
+            includeResult <- parseFile impl (CompleteResult alreadyParsed includedState) fileToInclude
+            worldPutStr impl $ show ("INCLUDED DATA BEGIN")
+            worldPutStr impl $ show (includeResult)
+            worldPutStr impl $ show ("INCLUDED DATA ENDED")
+            parseTokens impl includeResult remainingTokens
 
-parseFile :: PreprocResult -> String -> IO PreprocResult
-parseFile preprocResult fileName = do
-    parsedTokens <- tokenizeFile fileName
+parseFile :: World IO -> PreprocResult -> String -> IO PreprocResult
+parseFile impl preprocResult fileName = do
+    parsedTokens <- tokenizeFile impl fileName
     case parsedTokens of
         Left err -> return $ ParseErr err
-        Right parsedTokens -> parseTokens preprocResult parsedTokens
+        Right parsedTokens -> parseTokens impl preprocResult parsedTokens
 
 getPostPreprocText :: [PPGroupPart] -> [Char]
 getPostPreprocText [] = ""
@@ -135,16 +138,34 @@ getPostPreprocText (x:xs) =
         (PPGroupPart Text_line tokens) ->
             foldl (\x -> \y -> x ++ " " ++ y ) "" (map text tokens) ++ "\n" ++ getPostPreprocText xs
 
-main :: IO()
-main = do
-    parsed <- parseFile (CompleteResult [] (ParsingState[] )) "testSmallIn2.cpp"
+data World m  = World {
+    worldReadFile :: String -> m String,
+    worldPutStr :: String -> m()
+    -- worldPrint :: show a => a -> m()
+    -- worldPrint :: String -> m()
+}
+
+realImpl :: World IO
+realImpl = World {
+    worldReadFile = readFile,
+    worldPutStr = putStr
+    -- worldPrint = print
+}
+
+main2 :: World IO -> IO()
+main2 impl = do
+    parsed <- parseFile impl (CompleteResult [] (ParsingState[] )) "testSmallIn2.cpp"
     case parsed of
         CompleteResult tokens _ -> do
-            putStr $ getPostPreprocText $ reverse tokens
+            worldPutStr impl $ getPostPreprocText $ reverse tokens
         ParseErr err -> do
-            print $ "PARSE ERROR: " ++ err
+            worldPutStr impl $ show ("PARSE ERROR: " ++ err)
         req@(IncludeRequest _ _ _ _) -> do
-            print $ "PARSER ERROR - INCLUDE RETURNED!!! BEGIN"
-            print req
-            print $ "PARSER ERROR - INCLUDE RETURNED!!! END"
+            worldPutStr impl $ show ("PARSER ERROR - INCLUDE RETURNED!!! BEGIN")
+            worldPutStr impl $ show (req)
+            worldPutStr impl $ show ("PARSER ERROR - INCLUDE RETURNED!!! END")
     return ()
+
+main :: IO()
+main = do
+    main2 realImpl
