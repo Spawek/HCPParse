@@ -3,6 +3,7 @@ import PPTokenParser
 import Text.ParserCombinators.Parsec
 import Lib.Util (concatWith)
 
+-- NOTE: maybe alreadyparsed should be PPTokens?
 data PreprocResult =
     IncludeRequest {
         alreadyParsed :: [PPGroupPart],
@@ -23,6 +24,22 @@ appendToken :: PreprocResult -> PPGroupPart -> PreprocResult
 appendToken err@(ParseErr _) _ = err
 appendToken (CompleteResult x y) newToken = (CompleteResult (newToken:x) y)
 appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c d)
+
+replaceMacros :: ParsingState -> [PPToken] -> [PPToken]
+replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
+
+replaceMacros2 :: [(PPToken, [PPToken])] -> PPToken -> [PPToken]
+replaceMacros2 [] token = [token]
+replaceMacros2 (x:xs) token =
+    let
+        curr = if def == token
+               then repl
+               else [token]
+    in
+        concatMap (replaceMacros2 xs) curr
+    where
+        def = fst x
+        repl = snd x
 
 performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
@@ -59,9 +76,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
             in
                 IncludeRequest resultTokens fileToInclude xs parsingState
         text@(PPGroupPart Text_line groupTokens) ->
-            performPreproc (appendToken lastResult text) xs
-                
-
+            performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros parsingState groupTokens))) xs
 
 tokenizeFile :: String -> IO (Either String [PPGroupPart])
 tokenizeFile fileName = do
@@ -89,7 +104,6 @@ tokenizeFile fileName = do
                     print file
                     putStr "\nPARSED TOKENS END\n"
                     return $ Right parsedTokens
-
 
 parseTokens :: PreprocResult -> [PPGroupPart] -> IO PreprocResult
 parseTokens preprocResult tokens = do
