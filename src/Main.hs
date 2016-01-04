@@ -89,7 +89,7 @@ tokenizeFile impl fileName = do
     worldPutStr impl "\nRAW TEXT END\n"
     case ppTokenize rawText of
         Left err -> do
-            worldPutStr impl $ show ("tokenizer error: " ++ show err)
+            worldPrint impl $ "tokenizer error: " ++ show err
             return $ (Left (show err))
         Right tokens -> do
             worldPutStr impl "\nPP TOKENS BEGIN\n"
@@ -100,28 +100,28 @@ tokenizeFile impl fileName = do
             worldPutStr impl "\nREPRINT END\n"
             case parsePPFile tokens of
                 Left err -> do
-                    worldPutStr impl $ show ("preproc parser error: " ++ show err)
+                    worldPrint impl $ "preproc parser error: " ++ show err
                     return $ Left (show err)
                 Right file@(PPFile parsedTokens) -> do
                     worldPutStr impl "\nPARSED TOKENS BEGIN\n"
-                    worldPutStr impl $ show (file)
+                    worldPrint impl file
                     worldPutStr impl "\nPARSED TOKENS END\n"
                     return $ Right parsedTokens
 
 parseTokens :: World IO -> PreprocResult -> [PPGroupPart] -> IO PreprocResult
 parseTokens impl preprocResult tokens = do
     result <- return $ performPreproc preprocResult tokens
-    worldPutStr impl $ show ("PREPROC DATA BEGIN")
-    worldPutStr impl $ show (result)
-    worldPutStr impl $ show ("PREPROC DATA ENDED")
+    worldPrint impl $ "PREPROC DATA BEGIN"
+    worldPrint impl result
+    worldPrint impl $ "PREPROC DATA ENDED"
     case result of
         res@(ParseErr _) -> return res
         res@(CompleteResult _ _) -> return res
         res@(IncludeRequest alreadyParsed fileToInclude remainingTokens includedState) -> do
             includeResult <- parseFile impl (CompleteResult alreadyParsed includedState) fileToInclude
-            worldPutStr impl $ show ("INCLUDED DATA BEGIN")
-            worldPutStr impl $ show (includeResult)
-            worldPutStr impl $ show ("INCLUDED DATA ENDED")
+            worldPrint impl $ "INCLUDED DATA BEGIN"
+            worldPrint impl includeResult
+            worldPrint impl $ "INCLUDED DATA ENDED"
             parseTokens impl includeResult remainingTokens
 
 parseFile :: World IO -> PreprocResult -> String -> IO PreprocResult
@@ -140,16 +140,15 @@ getPostPreprocText (x:xs) =
 
 data World m  = World {
     worldReadFile :: String -> m String,
-    worldPutStr :: String -> m()
-    -- worldPrint :: show a => a -> m()
-    -- worldPrint :: String -> m()
+    worldPutStr :: String -> m(),
+    worldPrint :: (Show a) => a -> m()
 }
 
 realImpl :: World IO
 realImpl = World {
     worldReadFile = readFile,
-    worldPutStr = putStr
-    -- worldPrint = print
+    worldPutStr = putStr,
+    worldPrint = print
 }
 
 main2 :: World IO -> IO()
@@ -159,11 +158,11 @@ main2 impl = do
         CompleteResult tokens _ -> do
             worldPutStr impl $ getPostPreprocText $ reverse tokens
         ParseErr err -> do
-            worldPutStr impl $ show ("PARSE ERROR: " ++ err)
+            worldPrint impl $ "PARSE ERROR: " ++ err
         req@(IncludeRequest _ _ _ _) -> do
-            worldPutStr impl $ show ("PARSER ERROR - INCLUDE RETURNED!!! BEGIN")
-            worldPutStr impl $ show (req)
-            worldPutStr impl $ show ("PARSER ERROR - INCLUDE RETURNED!!! END")
+            worldPrint impl $ "PARSER ERROR - INCLUDE RETURNED!!! BEGIN"
+            worldPrint impl req
+            worldPrint impl $ "PARSER ERROR - INCLUDE RETURNED!!! END"
     return ()
 
 main :: IO()
