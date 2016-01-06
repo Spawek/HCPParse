@@ -1,5 +1,4 @@
-{-# LANGUAGE DatatypeContexts, RankNTypes, ConstraintKinds #-}
--- TODO: don't know what DatatypeContexts and ConstraintKinds really is (and DatatypeContexts is reprecated)
+{-# LANGUAGE RankNTypes #-}
 
 import Tokenizer
 import PPTokenParser
@@ -19,8 +18,8 @@ data PreprocResult =
     ParseErr {errorMessage :: String }
     deriving (Eq, Show)
 
-data ParsingState = ParsingState{
-    definitions :: [(PPToken, [PPToken])]
+data ParsingState = ParsingState { --TODO: if it contains just 1 element maybe it's not needed?
+    definitions :: [MacroDefinition]
 }  deriving (Eq, Show)
 
 appendToken :: PreprocResult -> PPGroupPart -> PreprocResult
@@ -31,7 +30,7 @@ appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c
 replaceMacros :: ParsingState -> [PPToken] -> [PPToken]
 replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
 
-replaceMacros2 :: [(PPToken, [PPToken])] -> PPToken -> [PPToken]
+replaceMacros2 :: [MacroDefinition] -> PPToken -> [PPToken]
 replaceMacros2 [] token = [token]
 replaceMacros2 (x:xs) token =
     let
@@ -41,8 +40,8 @@ replaceMacros2 (x:xs) token =
     in
         concatMap (replaceMacros2 xs) curr
     where
-        def = fst x
-        repl = snd x
+        def = macroName x
+        repl = replacement_list x
 
 performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
@@ -57,17 +56,16 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
                         Ifndef -> takeIfGroupIfDefined (not isTokenDefined)
                         Ifdef -> takeIfGroupIfDefined isTokenDefined
                         where
-                            isTokenDefined = elem (head groupTokens) $ map fst (definitions parsingState)
+                            isTokenDefined = elem (head groupTokens) $ map macroName (definitions parsingState)
                             takeIfGroup = performPreproc lastResult (subGroups ++ xs)
                             dontTakeIfGroup = performPreproc lastResult xs
                             takeIfGroupIfDefined isDefined =
                                 if isDefined
                                 then takeIfGroup
                                 else dontTakeIfGroup
-        (PPGroupPart (Control_line Define) groupTokens) ->
+        (PPGroupPart (Control_line (Define def@(MacroDefinition _ _ _))) groupTokens) ->
             let
-                newDefinition = (head groupTokens, tail groupTokens)
-                newParsingState = ParsingState (newDefinition:(definitions parsingState))
+                newParsingState = ParsingState (def:(definitions parsingState))
                 newResult = CompleteResult resultTokens newParsingState
             in
                 performPreproc newResult xs

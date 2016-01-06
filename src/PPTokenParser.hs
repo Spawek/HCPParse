@@ -28,9 +28,15 @@ data IfGroupType =
     If
     deriving (Show, Eq)
 
+data MacroDefinition = MacroDefinition {
+    macroName :: PPToken,
+    paramsNo :: Int,
+    replacement_list :: [PPToken]
+} deriving (Show, Eq)
+
 data ControlLineType =
     Include |
-    Define
+    Define {definiton :: MacroDefinition}
     deriving (Show, Eq)
 
 showPPGroupPartsList :: [PPGroupPart] -> String
@@ -140,12 +146,57 @@ includeLine = do
 
 defineLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 defineLine = do
-    x <- matchToken Preprocessing_op_or_punc "#"
-    y <- matchToken Identifier "define"
+    matchToken Preprocessing_op_or_punc "#"
+    matchToken Identifier "define"
+    try argDefine <|> try noArgDefine
+
+noArgDefine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+noArgDefine = do
     identifier <- matchTokenType Identifier
     replacement_list <- many $ noneOfTokenTypes [PP_NewLine]
     matchTokenType PP_NewLine
-    return $ PPGroupPart (Control_line Define) ([identifier] ++ replacement_list)
+    return $ PPGroupPart (Control_line (Define (MacroDefinition identifier 0 replacement_list))) []
+
+macroParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
+macroParameter = matchTokenType Identifier
+
+nextMacroParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
+nextMacroParameter = do
+    matchToken Preprocessing_op_or_punc ","
+    param <- macroParameter
+    return param
+
+macroParameters :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m [PPToken]
+macroParameters = do
+    matchToken Preprocessing_op_or_punc "("
+    firstParam <- macroParameter
+    nextParams <- many nextMacroParameter
+    matchToken Preprocessing_op_or_punc ")"
+    return $ firstParam:nextParams
+
+applyParamsToReplacementList :: [PPToken] -> [PPToken] -> [PPToken]
+applyParamsToReplacementList = applyParamsToReplacementList2 0
+
+applyParamsToReplacementList2 :: Int -> [PPToken] -> [PPToken] -> [PPToken]
+applyParamsToReplacementList2 _ [] replacement_list = replacement_list
+applyParamsToReplacementList2 no (x:xs) replacement_list = applyParamsToReplacementList2 (no+1) xs fixedList
+    where fixedList = map (\t -> if x == t then PPToken (PP_MacroParameter no) [] else x) replacement_list
+
+-- FROM: http://stackoverflow.com/questions/31036474/haskell-checking-if-all-list-elements-are-unique
+allDifferent :: (Eq a) => [a] -> Bool -- TODO: move it to libs
+allDifferent []     = True
+allDifferent (x:xs) = x `notElem` xs && allDifferent xs
+
+argDefine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+argDefine = do
+    identifier <- matchTokenType Identifier
+    parameters <- macroParameters
+    if not $ allDifferent parameters
+    then unexpected $ "macro parameters are not unique: " ++ show parameters
+    else do
+        replacement_list <- many (noneOfTokenTypes [PP_NewLine])
+        matchTokenType PP_NewLine
+        return $ PPGroupPart (Control_line (Define (MacroDefinition identifier (length parameters) replacement_list))) []
 
 emptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 emptyTextLine = do

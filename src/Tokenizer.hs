@@ -33,7 +33,8 @@ data PPTokenType =
     Preprocessing_op_or_punc |
     PP_NewLine |
     PP_AnythingElse |
-    PP_Comment
+    PP_Comment |
+    PP_MacroParameter {macroParameterNumberCountingFrom0 :: Int} -- needed in PPTokenParser
     deriving (Eq)
 
 data PPToken = PPToken {
@@ -53,6 +54,7 @@ instance Show PPTokenType where
     show PP_NewLine = "new_line"
     show PP_AnythingElse = "else"
     show PP_Comment = "comment" 
+    show (PP_MacroParameter no) = "macro_param" ++ show no
 
 instance Show PPToken where
     show (PPToken tokenType text) = "(" ++ show text ++ " : " ++ show tokenType ++ ")"
