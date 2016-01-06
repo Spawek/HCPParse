@@ -31,7 +31,7 @@ data IfGroupType =
 data MacroDefinition = MacroDefinition {
     macroName :: PPToken,
     paramsNo :: Int,
-    replacement_list :: [PPToken]
+    replacement_list :: [PPToken] --TODO: change it to camelCase
 } deriving (Show, Eq)
 
 data ControlLineType =
@@ -167,7 +167,7 @@ nextMacroParameter = do
     return param
 
 macroParameters :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m [PPToken]
-macroParameters = do
+macroParameters = do -- NOTE: 0 parameters macros are not supported (but why do they even exist?)
     matchToken Preprocessing_op_or_punc "("
     firstParam <- macroParameter
     nextParams <- many nextMacroParameter
@@ -191,12 +191,13 @@ argDefine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 argDefine = do
     identifier <- matchTokenType Identifier
     parameters <- macroParameters
-    if not $ allDifferent parameters
-    then unexpected $ "macro parameters are not unique: " ++ show parameters
-    else do
+    if allDifferent parameters
+    then do
         replacement_list <- many (noneOfTokenTypes [PP_NewLine])
         matchTokenType PP_NewLine
         return $ PPGroupPart (Control_line (Define (MacroDefinition identifier (length parameters) replacement_list))) []
+    else
+        unexpected $ "macro parameters are not unique: " ++ show parameters
 
 emptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 emptyTextLine = do

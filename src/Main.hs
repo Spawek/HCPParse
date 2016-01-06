@@ -1,8 +1,8 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts #-}
 
 import Tokenizer
 import PPTokenParser
-import Text.ParserCombinators.Parsec
+import Text.Parsec
 import Lib.Util (concatWith)
 
 -- NOTE: maybe alreadyparsed should be PPTokens?
@@ -27,8 +27,53 @@ appendToken err@(ParseErr _) _ = err
 appendToken (CompleteResult x y) newToken = (CompleteResult (newToken:x) y)
 appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c d)
 
-replaceMacros :: ParsingState -> [PPToken] -> [PPToken]
-replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
+-- replaceMacros :: ParsingState -> [PPToken] -> [PPToken]
+-- replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
+
+replaceMacros :: ParsingState -> [PPToken] -> [PPToken] -- with macro functions
+replaceMacros (ParsingState definitions) tokens =  replaceMacrosAlt2 definitions tokens
+
+replaceMacrosAlt2 :: [MacroDefinition] -> [PPToken] -> [PPToken] -- TODO: it's basicly the same as 1 so can be merged
+replaceMacrosAlt2 [] tokens = tokens
+replaceMacrosAlt2 (x:xs) tokens =
+    case parse (macroReplacementParser x) "macro replacement parser error" tokens of
+        Right tokens -> replaceMacrosAlt2 xs tokens
+        -- TODO: is Left possible?
+
+macroReplacementParser :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
+macroReplacementParser x = do
+    x <- many (try (replac x) <|> justTakeToken) --NOTE: to 2 chyba nie przejdzie, bo jest w many a moe przyjac wszywsko - wiec caly parser przyjmuje cokolwiek (chociaz w sumie on ma tak dzialac)
+    return $ concat x
+
+macroReplacementParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
+macroReplacementParameter = satisfyT (\(PPToken t val) -> not (t == Preprocessing_op_or_punc && (val == ")" || val == ",")))
+
+nextMacroReplacementParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
+nextMacroReplacementParameter = do
+    matchToken Preprocessing_op_or_punc ","
+    param <- macroReplacementParameter
+    return param
+
+substituteReplacementList :: [PPToken] -> [PPToken] -> [PPToken]
+substituteReplacementList list params = substituteReplacementList2 0 list params
+
+substituteReplacementList2 :: Int -> [PPToken] -> [PPToken] -> [PPToken]
+substituteReplacementList2 _ list [] = list
+substituteReplacementList2 no list (x:xs) = map (\t -> if t == (PPToken (PP_MacroParameter no) []) then x else t) list -- TODO: when multiple tokens - just change to concatMap and t to [t]
+
+replac :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
+replac (MacroDefinition name paramsNo replacementList) = do
+    satisfyT (\t -> t == name)
+    matchToken Preprocessing_op_or_punc "("
+    firstParam <- macroReplacementParameter --TODO: macro parameter can have multiple tokens inside? --ERROR!
+    nextParams <- many nextMacroParameter
+    matchToken Preprocessing_op_or_punc ")"
+    return $ substituteReplacementList replacementList (firstParam:nextParams)
+
+justTakeToken :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m [PPToken]
+justTakeToken = do
+    x <- anyT
+    return [x]
 
 replaceMacros2 :: [MacroDefinition] -> PPToken -> [PPToken]
 replaceMacros2 [] token = [token]
