@@ -47,7 +47,7 @@ macroReplacementParser x = do
     return $ concat x
 
 macroReplacementParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
-macroReplacementParameter = satisfyT (\(PPToken t val) -> not (t == Preprocessing_op_or_punc && (val == ")" || val == ",")))
+macroReplacementParameter = satisfyT (\(PPToken t val) -> not (t == Preprocessing_op_or_punc && (val == ")" || val == ","))) -- TODO: parenthesis should be allowed here
 
 nextMacroReplacementParameter :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPToken
 nextMacroReplacementParameter = do
@@ -60,7 +60,11 @@ substituteReplacementList list params = substituteReplacementList2 0 list params
 
 substituteReplacementList2 :: Int -> [PPToken] -> [PPToken] -> [PPToken]
 substituteReplacementList2 _ list [] = list
-substituteReplacementList2 no list (x:xs) = map (\t -> if t == (PPToken (PP_MacroParameter no) []) then x else t) list -- TODO: when multiple tokens - just change to concatMap and t to [t]
+substituteReplacementList2 no list (x:xs) =
+    let
+        currResult = map (\t -> if t == (PPToken (PP_MacroParameter no) []) then x else t) list -- TODO: when multiple tokens - just change to concatMap and t to [t]
+    in
+        substituteReplacementList2 (no+1) currResult xs        
 
 replac :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
 replac (MacroDefinition name 0 replacementList) = do
