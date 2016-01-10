@@ -127,7 +127,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState@(ParsingStat
         text@(PPGroupPart Text_line groupTokens) ->
             performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros definitions groupTokens))) xs
 
-tokenizeFile :: World IO -> String -> IO (Either String [PPGroupPart]) --TODO: this file doesn't need IO at all - it can get a string on input
+tokenizeFile :: World IO -> String -> IO (Either String [PPGroupPart])
 tokenizeFile impl fileName = do
     rawText <- worldReadFile impl fileName
     worldPutStr impl "\nRAW TEXT BEGIN\n"
