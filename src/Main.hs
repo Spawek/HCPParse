@@ -28,17 +28,11 @@ appendToken err@(ParseErr _) _ = err
 appendToken (CompleteResult x y) newToken = (CompleteResult (newToken:x) y)
 appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c d)
 
--- replaceMacros :: ParsingState -> [PPToken] -> [PPToken]
--- replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
-
-replaceMacros :: ParsingState -> [PPToken] -> [PPToken] -- with macro functions
-replaceMacros (ParsingState definitions) tokens =  replaceMacros2 definitions tokens
-
-replaceMacros2 :: [MacroDefinition] -> [PPToken] -> [PPToken] -- TODO: it's basicly the same as 1 so can be merged
-replaceMacros2 [] tokens = tokens
-replaceMacros2 (x:xs) tokens =
+replaceMacros :: [MacroDefinition] -> [PPToken] -> [PPToken] -- TODO: it's basicly the same as 1 so can be merged
+replaceMacros [] tokens = tokens
+replaceMacros (x:xs) tokens =
     case parse (macroReplacementParser x) "macro replacement parser error" tokens of
-        Right tokens -> replaceMacros2 xs tokens
+        Right tokens -> replaceMacros xs tokens
         -- TODO: is Left possible?
 
 macroReplacementParser :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
@@ -101,7 +95,7 @@ performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
 performPreproc lastResult@(IncludeRequest _ _ _ _) _ = lastResult
 performPreproc lastResult@(CompleteResult _ _) [] = lastResult
-performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
+performPreproc lastResult@(CompleteResult resultTokens parsingState@(ParsingState definitions)) (x:xs) =
     case x of
         (PPGroupPart (If_section if_group) groupTokens) ->
             case if_group of
@@ -110,7 +104,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
                         Ifndef -> takeIfGroupIfDefined (not isTokenDefined)
                         Ifdef -> takeIfGroupIfDefined isTokenDefined
                         where
-                            isTokenDefined = elem (head groupTokens) $ map macroName (definitions parsingState)
+                            isTokenDefined = elem (head groupTokens) $ map macroName definitions
                             takeIfGroup = performPreproc lastResult (subGroups ++ xs)
                             dontTakeIfGroup = performPreproc lastResult xs
                             takeIfGroupIfDefined isDefined =
@@ -119,7 +113,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
                                 else dontTakeIfGroup
         (PPGroupPart (Control_line (Define def@(MacroDefinition _ _ _))) groupTokens) ->
             let
-                newParsingState = ParsingState (def:(definitions parsingState))
+                newParsingState = ParsingState (def:definitions)
                 newResult = CompleteResult resultTokens newParsingState
             in
                 performPreproc newResult xs
@@ -131,7 +125,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState) (x:xs) =
             in
                 IncludeRequest resultTokens fileToInclude xs parsingState
         text@(PPGroupPart Text_line groupTokens) ->
-            performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros parsingState groupTokens))) xs
+            performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros definitions groupTokens))) xs
 
 tokenizeFile :: World IO -> String -> IO (Either String [PPGroupPart]) --TODO: this file doesn't need IO at all - it can get a string on input
 tokenizeFile impl fileName = do
