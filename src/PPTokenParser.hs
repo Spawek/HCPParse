@@ -179,12 +179,17 @@ applyParamsToReplacementList = applyParamsToReplacementList2 0
 
 applyParamsToReplacementList2 :: Int -> [PPToken] -> [PPToken] -> [PPToken]
 applyParamsToReplacementList2 _ [] replacement_list = replacement_list
-applyParamsToReplacementList2 no (x:xs) replacement_list = applyParamsToReplacementList2 (no+1) xs fixedList
-    where fixedList = map (\t -> if x == t then PPToken (PP_MacroParameter no) [] else x) replacement_list
+applyParamsToReplacementList2 no (x:xs) replacement_list =
+    let
+        macroParam = PPToken (PP_MacroParameter no) []
+        changeTokensToMacroParam = (\t -> if x == t then macroParam else t)
+        fixedList = map changeTokensToMacroParam replacement_list
+    in 
+        applyParamsToReplacementList2 (no+1) xs fixedList
 
 -- FROM: http://stackoverflow.com/questions/31036474/haskell-checking-if-all-list-elements-are-unique
 allDifferent :: (Eq a) => [a] -> Bool -- TODO: move it to libs
-allDifferent []     = True
+allDifferent [] = True
 allDifferent (x:xs) = x `notElem` xs && allDifferent xs
 
 argDefine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
@@ -195,7 +200,10 @@ argDefine = do
     then do
         replacement_list <- many (noneOfTokenTypes [PP_NewLine])
         matchTokenType PP_NewLine
-        return $ PPGroupPart (Control_line (Define (MacroDefinition identifier (length parameters) replacement_list))) []
+        let
+            modifiedReplacementList = applyParamsToReplacementList parameters replacement_list
+
+        return $ PPGroupPart (Control_line (Define (MacroDefinition identifier (length parameters) modifiedReplacementList))) []
     else
         unexpected $ "macro parameters are not unique: " ++ show parameters
 

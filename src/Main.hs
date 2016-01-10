@@ -4,6 +4,7 @@ import Tokenizer
 import PPTokenParser
 import Text.Parsec
 import Lib.Util (concatWith)
+import Control.Monad (replicateM)
 
 -- NOTE: maybe alreadyparsed should be PPTokens?
 data PreprocResult =
@@ -31,13 +32,13 @@ appendToken (IncludeRequest a b c d) newToken = (IncludeRequest (newToken:a) b c
 -- replaceMacros (ParsingState definitions) tokens = concatMap (replaceMacros2 definitions) tokens
 
 replaceMacros :: ParsingState -> [PPToken] -> [PPToken] -- with macro functions
-replaceMacros (ParsingState definitions) tokens =  replaceMacrosAlt2 definitions tokens
+replaceMacros (ParsingState definitions) tokens =  replaceMacros2 definitions tokens
 
-replaceMacrosAlt2 :: [MacroDefinition] -> [PPToken] -> [PPToken] -- TODO: it's basicly the same as 1 so can be merged
-replaceMacrosAlt2 [] tokens = tokens
-replaceMacrosAlt2 (x:xs) tokens =
+replaceMacros2 :: [MacroDefinition] -> [PPToken] -> [PPToken] -- TODO: it's basicly the same as 1 so can be merged
+replaceMacros2 [] tokens = tokens
+replaceMacros2 (x:xs) tokens =
     case parse (macroReplacementParser x) "macro replacement parser error" tokens of
-        Right tokens -> replaceMacrosAlt2 xs tokens
+        Right tokens -> replaceMacros2 xs tokens
         -- TODO: is Left possible?
 
 macroReplacementParser :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
@@ -62,11 +63,14 @@ substituteReplacementList2 _ list [] = list
 substituteReplacementList2 no list (x:xs) = map (\t -> if t == (PPToken (PP_MacroParameter no) []) then x else t) list -- TODO: when multiple tokens - just change to concatMap and t to [t]
 
 replac :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
+replac (MacroDefinition name 0 replacementList) = do
+    satisfyT (\t -> t == name)
+    return replacementList
 replac (MacroDefinition name paramsNo replacementList) = do
     satisfyT (\t -> t == name)
     matchToken Preprocessing_op_or_punc "("
     firstParam <- macroReplacementParameter --TODO: macro parameter can have multiple tokens inside? --ERROR!
-    nextParams <- many nextMacroParameter
+    nextParams <- (replicateM (paramsNo-1)) nextMacroReplacementParameter
     matchToken Preprocessing_op_or_punc ")"
     return $ substituteReplacementList replacementList (firstParam:nextParams)
 
@@ -74,19 +78,6 @@ justTakeToken :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m [PPToken]
 justTakeToken = do
     x <- anyT
     return [x]
-
-replaceMacros2 :: [MacroDefinition] -> PPToken -> [PPToken]
-replaceMacros2 [] token = [token]
-replaceMacros2 (x:xs) token =
-    let
-        curr = if def == token
-               then repl
-               else [token]
-    in
-        concatMap (replaceMacros2 xs) curr
-    where
-        def = macroName x
-        repl = replacement_list x
 
 performPreproc :: PreprocResult -> [PPGroupPart] -> PreprocResult
 performPreproc lastResult@(ParseErr _) _ = lastResult 
@@ -196,7 +187,7 @@ realImpl = World {
 
 main2 :: World IO -> IO()
 main2 impl = do
-    parsed <- parseFile impl (CompleteResult [] (ParsingState[] )) "testSmallIn2.cpp"
+    parsed <- parseFile impl (CompleteResult [] (ParsingState[] )) "testSmallIn3.cpp"
     case parsed of
         CompleteResult tokens _ -> do
             worldPutStr impl $ getPostPreprocText $ reverse tokens
