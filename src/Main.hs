@@ -1,4 +1,6 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, DatatypeContexts #-}
+
+module Main where
 
 import Tokenizer
 import PPTokenParser
@@ -74,6 +76,7 @@ substituteReplacementList2 no list (x:xs) =
     in
         substituteReplacementList2 (no+1) currResult xs        
 
+-- NOTE: multi-line macro invocations are not supported
 replac :: Stream [PPToken] m PPToken => MacroDefinition -> ParsecT [PPToken] u m [PPToken]
 replac (MacroDefinition name 0 replacementList) = do
     satisfyT (\t -> t == name)
@@ -127,7 +130,7 @@ performPreproc lastResult@(CompleteResult resultTokens parsingState@(ParsingStat
         text@(PPGroupPart Text_line groupTokens) ->
             performPreproc (appendToken lastResult (PPGroupPart Text_line (replaceMacros definitions groupTokens))) xs
 
-tokenizeFile :: World IO -> String -> IO (Either String [PPGroupPart])
+tokenizeFile :: (Monad m) => World m -> String -> m (Either String [PPGroupPart])
 tokenizeFile impl fileName = do
     rawText <- worldReadFile impl fileName
     worldPutStr impl "\nRAW TEXT BEGIN\n"
@@ -154,7 +157,7 @@ tokenizeFile impl fileName = do
                     worldPutStr impl "\nPARSED TOKENS END\n"
                     return $ Right parsedTokens
 
-parseTokens :: World IO -> PreprocResult -> [PPGroupPart] -> IO PreprocResult
+parseTokens :: (Monad m) => World m -> PreprocResult -> [PPGroupPart] -> m PreprocResult
 parseTokens impl preprocResult tokens = do
     result <- return $ performPreproc preprocResult tokens
     worldPrint impl $ "PREPROC DATA BEGIN"
@@ -170,7 +173,7 @@ parseTokens impl preprocResult tokens = do
             worldPrint impl $ "INCLUDED DATA ENDED"
             parseTokens impl includeResult remainingTokens
 
-parseFile :: World IO -> PreprocResult -> String -> IO PreprocResult
+parseFile :: (Monad m) => World m -> PreprocResult -> String -> m PreprocResult
 parseFile impl preprocResult fileName = do
     parsedTokens <- tokenizeFile impl fileName
     case parsedTokens of
@@ -184,7 +187,7 @@ getPostPreprocText (x:xs) =
         (PPGroupPart Text_line tokens) ->
             foldl (\x -> \y -> x ++ " " ++ y ) "" (map text tokens) ++ "\n" ++ getPostPreprocText xs
 
-data World m  = World {
+data (Monad m) => World m  = World {
     worldReadFile :: String -> m String,
     worldPutStr :: String -> m(),
     worldPrint :: (Show a) => a -> m()
@@ -197,20 +200,25 @@ realImpl = World {
     worldPrint = print
 }
 
-main2 :: World IO -> IO()
-main2 impl = do
-    parsed <- parseFile impl (CompleteResult [] (ParsingState[] )) "testSmallIn3.cpp"
+preprocParser :: (Monad m) => World m -> String -> m([PPGroupPart])
+preprocParser impl file = do
+    parsed <- parseFile impl (CompleteResult [] (ParsingState[] )) file
     case parsed of
         CompleteResult tokens _ -> do
             worldPutStr impl $ getPostPreprocText $ reverse tokens
+            return $ reverse tokens
         ParseErr err -> do
             worldPrint impl $ "PARSE ERROR: " ++ err
+            return []
         req@(IncludeRequest _ _ _ _) -> do
             worldPrint impl $ "PARSER ERROR - INCLUDE RETURNED!!! BEGIN"
             worldPrint impl req
             worldPrint impl $ "PARSER ERROR - INCLUDE RETURNED!!! END"
-    return ()
+            return []
 
+-- they say if the only purpose for IO is logging then Writer monad can be used
+-- https://wiki.haskell.org/Avoiding_IO
 main :: IO()
 main = do
-    main2 realImpl
+    preprocParser realImpl "testSmallIn3.cpp"
+    return ()
