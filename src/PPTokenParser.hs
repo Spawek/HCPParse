@@ -83,6 +83,9 @@ noneOfTokenTypes typeList = satisfyT (\x -> (not (elem (tokenType x) typeList)))
 matchTokenType :: (Stream [PPToken] m PPToken) => PPTokenType -> ParsecT [PPToken] u m PPToken
 matchTokenType expectedType = satisfyT (\x -> (tokenType x) == (expectedType)) <?> (show expectedType)
 
+eofT :: (Stream [PPToken] m PPToken) => ParsecT [PPToken] u m ()
+eofT = notFollowedBy anyT
+
 -- TODO: can be optimized for speed (don't create new token)
 matchToken :: (Stream [PPToken] m PPToken) => PPTokenType -> String -> ParsecT [PPToken] u m PPToken
 matchToken expectedType expectedText = satisfyT (== (PPToken expectedType expectedText)) <?> "(" ++ (show expectedType ++ " : " ++ show expectedText) ++ ")"
@@ -209,8 +212,8 @@ argDefine = do
 
 emptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 emptyTextLine = do
-    x <- matchTokenType PP_NewLine
-    return $ PPGroupPart Text_line [x]
+    (matchTokenType PP_NewLine)
+    return $ PPGroupPart Text_line []
 
 nonEmptyTextLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
 nonEmptyTextLine = do
@@ -219,8 +222,16 @@ nonEmptyTextLine = do
     matchTokenType PP_NewLine
     return $ PPGroupPart Text_line (nonHash:x)
 
+-- TODO: join with NewLine version somehow (eofT has different return type than matchTokenType PP_NewLine)
+nonEmptyTextLine2 :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
+nonEmptyTextLine2 = do
+    nonHash <- satisfyT (\(PPToken t val) -> t /= PP_NewLine && ( not (val == "#" && t == Preprocessing_op_or_punc))) <?> "nonEmptyTextLine2 start"
+    x <- many $ noneOfTokenTypes [PP_NewLine]
+    eofT
+    return $ PPGroupPart Text_line (nonHash:x)    
+
 textLine :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPGroupPart
-textLine = try (emptyTextLine) <|>  try (nonEmptyTextLine)
+textLine = try (emptyTextLine) <|> try (nonEmptyTextLine) <|> try (nonEmptyTextLine2)
 
 ppFileParser :: Stream [PPToken] m PPToken => ParsecT [PPToken] u m PPFile
 ppFileParser = PPFile <$> ppGroups

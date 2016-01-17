@@ -4,5 +4,5 @@ import Preproc
 
 main :: IO()
 main = do
-    preprocParser realImpl "testSmallIn3.cpp"
+    preprocParser realWorld "testSmallIn3.cpp"
     return ()
